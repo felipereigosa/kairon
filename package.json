@@ -1,0 +1,20 @@
+{
+  "name": "name",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "webpack serve --open --config webpack.config.js"
+  },
+  "dependencies": {
+    "fs": "^0.0.1-security",
+    "highlight.js": "^11.8.0",
+    "three": "^0.153.0"
+  },
+  "devDependencies": {
+    "html-webpack-plugin": "^4.5.0",
+    "webpack": "^5.87.0",
+    "webpack-cli": "^4.10.0",
+    "webpack-dev-server": "^3.11.0"
+  }
+}

@@ -179,7 +179,7 @@ export class Editor {
                   }
                  // ${Date.now()}`;
 
-    fetch('/update-cube', {
+    fetch('/update-code', {
       method: 'POST',
       headers: {
         'Content-Type': 'text/plain',

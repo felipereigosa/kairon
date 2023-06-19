@@ -23,14 +23,14 @@ function useColors (code) {
 }
 
 function removeAllSpans (code) {
-  return code.replace(/<span class=".*?">(.*?)<\/span>/g,
+  return code.replace(/<span class=".*?">(.*?)<\/span>/gs,
                       function(match, contents) {
                         return " ".repeat(contents.length);
                       });
 }
 
 function removeColorSpans (code, color) {
-  const regex = new RegExp(`<span class="${color}">(.*?)<\/span>`, 'g');
+  const regex = new RegExp(`<span class="${color}">(.*?)<\/span>`, 'gs');
   return code.replace(regex, "$1");
 }
 
@@ -54,9 +54,9 @@ function subtractStrings (s1, s2) {
 }
 
 export function highlight (code) {
-  let temp = hljs.highlight('javascript', code).value;
+  let temp = hljs.highlight(code, {language: 'javascript'}).value;
 
-  temp = temp.replace(/<span class="hljs-subst">(.*?)<\/span>/g, "$1");
+  temp = temp.replace(/<span class="hljs-subst">(.*?)<\/span>/gs, "$1");
   temp = useColors(temp);
   temp = temp.replace(/&quot;/g, '"');
   temp = temp.replace(/&gt;/g, '>');

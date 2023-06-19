@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { run } from './cube';
+import { run } from './code';
 import { Editor } from './editor';
 
 const scene = new THREE.Scene();
@@ -38,15 +38,22 @@ const editor = new Editor();
 editor.mesh.position.x = -6;
 scene.add(editor.mesh);
 
-document.addEventListener("keydown", function (event) {
-  editor.onKeyDown(event);
-})
+const source = new EventSource('http://localhost:3000/events');
+source.onmessage = function(event) {
+  const data = JSON.parse(event.data);
+  editor.onKeyDown(data);
+};
 
-module.hot.accept('./cube', function () {
+source.onerror = function() {
+  console.log("Could not connect to server");
+  source.close();
+};
+
+module.hot.accept('./code', function () {
   try {
     run(scene);
   }
   catch (e) {
     console.error(e);
   }
-})
+});

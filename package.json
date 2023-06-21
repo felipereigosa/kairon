@@ -12,6 +12,7 @@
     "electron": "^25.1.1",
     "fs": "^0.0.1-security",
     "highlight.js": "^11.8.0",
+    "jquery": "^3.7.0",
     "three": "^0.153.0"
   },
   "devDependencies": {

@@ -1,17 +1,18 @@
 import * as THREE from 'three';
 import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 import { highlight } from './highlight';
+import * as util from './util';
 
 const textOffset = [-2, 2];
 
 export class Editor {
   constructor(scene) {
-    this.mesh = this.createPlane(9, 5, 0.2);
+    this.mesh = util.createRoundedPlane(9, 5, 0.2);
     this.codeBlocks = [{text: "const x = 10;\nconsole.log('value = ' + x);",
                         index: 0}];
     this.tab = 0;
     this.cursor = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.3),
-                                 new THREE.MeshBasicMaterial({color: 0x101010}));
+                                 new THREE.MeshBasicMaterial({color: 0xffffff}));
     this.cursor.position.set(textOffset[0] + 0.08, textOffset[1] + 0.1, 0.01);
     this.mesh.add(this.cursor);
 
@@ -20,8 +21,7 @@ export class Editor {
       this.font = font;
       const shapes = font.generateShapes("", 1);
       const geometry = new THREE.ShapeGeometry(shapes);
-      const material = new THREE.MeshBasicMaterial({transparent: true,
-                                                    opacity: 0.8});
+      const material = new THREE.MeshBasicMaterial();
       const template = new THREE.Mesh(geometry, material);
       template.scale.set(0.2, 0.2, 0.2);
       template.position.set(textOffset[0], textOffset[1], 0.02);
@@ -36,6 +36,7 @@ export class Editor {
                       "lightblue": 0x20ffff,
                       "purple": 0x710096,
                       "teal": 0x008080,
+                      "black": 0x000000,
                      };
 
       for (let color of Object.keys(colors)) {
@@ -48,12 +49,12 @@ export class Editor {
 
       this.tabSelector = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.3),
                                         new THREE.MeshBasicMaterial({color: 0x101010}));
-      this.tabSelector.position.set(-3.3, 2.06 - 0.3, 0.01);
+      this.tabSelector.position.set(-3.4, 2.06 - 0.3, 0.01);
       this.mesh.add(this.tabSelector);
 
       const tabShapes = font.generateShapes("createSphe...\nbar\nsomething", 0.8);
       this.tabText = new THREE.Mesh(new THREE.ShapeGeometry(tabShapes),
-                                    new THREE.MeshBasicMaterial({color: 0xaaaaaa}));
+                                    new THREE.MeshBasicMaterial({color: 0xffffff}));
       this.tabText.scale.set(0.2, 0.2, 0.2);
       this.tabText.position.set(textOffset[0] - 2.2, textOffset[1], 0.02);
       this.mesh.add(this.tabText);
@@ -67,36 +68,6 @@ export class Editor {
     divider.scale.set(0.01, 4.5, 1);
 
     this.mesh.add(divider);
-  }
-
-  createPlane (width, height, radius) {
-    let shape = new THREE.Shape();
-    const left = -width / 2, top =  -height / 2;
-    const right = width / 2, bottom = height / 2;
-
-    shape.moveTo(left, top + radius);
-    shape.lineTo(left, bottom - radius);
-    shape.quadraticCurveTo(left, bottom, left + radius, bottom);
-    shape.lineTo(right - radius, bottom);
-    shape.quadraticCurveTo(right, bottom, right, bottom - radius);
-    shape.lineTo(right, top + radius);
-    shape.quadraticCurveTo(right, top, right - radius, top);
-    shape.lineTo(left + radius, top);
-    shape.quadraticCurveTo(left, top, left, top + radius);
-
-    const geometry = new THREE.ExtrudeGeometry(shape, {
-      depth: 0,
-      bevelEnabled: false
-    });
-
-    const material = new THREE.MeshBasicMaterial({
-      color: 'black',
-      transparent: true,
-      opacity: 0.6,
-      side: THREE.DoubleSide
-    });
-
-    return new THREE.Mesh(geometry, material);
   }
 
   getTotal (row) {
@@ -126,10 +97,20 @@ export class Editor {
     const block = this.codeBlocks[this.tab];
     const result = highlight(block.text);
 
+    result.black = block.text;
+    result.black = result.black.replace(/[\x20-\x7E]/gs, ' ');
+    if (block.index !== block.text.length) {
+      result.black = util.replaceChar(result.black, block.index, block.text[block.index]);
+    }
+
     for (let color of Object.keys(result)) {
       const colorMesh = this.mesh.getObjectByName(color);
       colorMesh.geometry.dispose();
-      const shapes = this.font.generateShapes(result[color], 1);
+      let text = result[color];
+      if (util.isPrintable(text[block.index]) && color !== "black") {
+        text = util.replaceChar(text, block.index, ' ');
+      }
+      const shapes = this.font.generateShapes(text, 1);
       colorMesh.geometry = new THREE.ShapeGeometry(shapes);
     }
 
@@ -138,8 +119,7 @@ export class Editor {
                              textOffset[1] + 0.1 - 0.39 * row,
                              0.01);
 
-    this.tabSelector.position.set(-3.3, 2.06 - 0.3 * this.tab, 0.01);
-
+    this.tabSelector.position.y = 2.06 - 0.3 * this.tab;
     this.tabText.geometry.dispose();
 
     let text = "";
@@ -150,16 +130,9 @@ export class Editor {
     this.tabText.geometry = new THREE.ShapeGeometry(shapes);
   }
 
-  splitText () {
-    const block = this.codeBlocks[this.tab];
-    const before = block.text.substring(0, block.index);
-    const after = block.text.substring(block.index);
-    return [before, after];
-  }
-
   insert (key) {
-    const [before, after] = this.splitText();
     const block = this.codeBlocks[this.tab];
+    const [before, after] = util.splitText(block.text, block.index);
     block.text = before + key + after;
     block.index += 1;
     this.update();
@@ -189,8 +162,8 @@ export class Editor {
   }
 
   erase (offset) {
-    const [before, after] = this.splitText();
     const block = this.codeBlocks[this.tab];
+    const [before, after] = util.splitText(block.text, block.index);
     if (offset < 0) {
       block.text = before.substring(0, before.length + offset) + after;
       block.index = Math.max(0, block.index + offset);
@@ -267,8 +240,7 @@ export class Editor {
     else if (event.key === "ArrowDown") {
       this.moveCursor(0, 1);
     }
-    else if (event.key.match(/[a-z0-9`~!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/? ]/i) &&
-             event.key.length === 1) {
+    else if (util.isPrintable(event.key) && event.key.length === 1) {
       this.insert(event.key);
     }
     else if (event.key === "Tab") {

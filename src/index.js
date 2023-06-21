@@ -44,6 +44,10 @@ source.onmessage = function(event) {
   editor.onKeyDown(data);
 };
 
+document.addEventListener('keydown', (event) => {
+  editor.onKeyDown(event);
+});
+
 source.onerror = function() {
   console.log("Could not connect to server");
   source.close();

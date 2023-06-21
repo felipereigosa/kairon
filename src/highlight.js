@@ -1,5 +1,6 @@
 
 const hljs = require('highlight.js');
+const jquery = require('jquery');
 
 const colorMap = {"hljs-keyword": "blue",
                   "hljs-string": "orange",
@@ -11,6 +12,7 @@ const colorMap = {"hljs-keyword": "blue",
                   "hljs-params": "green",
                   "hljs-property": "teal",
                   "hljs-variable language_": "purple",
+                  "hljs-variable constant_": "red",
                  };
 
 function useColors (code) {
@@ -32,6 +34,15 @@ function removeAllSpans (code) {
 function removeColorSpans (code, color) {
   const regex = new RegExp(`<span class="${color}">(.*?)<\/span>`, 'gs');
   return code.replace(regex, "$1");
+}
+
+function removeQuotedSpans (code) {
+  const temp = jquery(`<div>${code}</div>`);
+  temp.find('span.hljs-string').each(function() {
+    let t = jquery(this);
+    t.text(t.text())
+  });
+  return temp.html();
 }
 
 function getColor (code, rest, color) {
@@ -56,7 +67,7 @@ function subtractStrings (s1, s2) {
 export function highlight (code) {
   let temp = hljs.highlight(code, {language: 'javascript'}).value;
 
-  temp = temp.replace(/<span class="hljs-subst">(.*?)<\/span>/gs, "$1");
+  temp = removeQuotedSpans(temp);
   temp = useColors(temp);
   temp = temp.replace(/&quot;/g, '"');
   temp = temp.replace(/&gt;/g, '>');

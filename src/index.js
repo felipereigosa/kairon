@@ -8,7 +8,7 @@ const aspect = window.innerWidth / window.innerHeight;
 const camera = new THREE.PerspectiveCamera(75, aspect, 0.1, 1000);
 const renderer = new THREE.WebGLRenderer({antialias: true});
 const controls = new OrbitControls(camera, renderer.domElement);
-camera.position.set(-6, 0, 4);
+camera.position.set(-6, 0, 5);
 controls.target.set(-6, 0, 0);
 
 const container = document.getElementById('container');
@@ -53,9 +53,20 @@ source.onerror = function() {
   source.close();
 };
 
+function getOutput(func) {
+    let logOutput = '';
+    const originalLog = console.log;
+    console.log = function(message) {
+        logOutput += message + '\n';
+    };
+    func();
+    console.log = originalLog;
+    return logOutput;
+}
+
 module.hot.accept('./code', function () {
   try {
-    run(scene);
+    editor.handleOutput(getOutput(() => run(scene)));
   }
   catch (e) {
     console.error(e);

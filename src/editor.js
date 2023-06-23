@@ -2,12 +2,13 @@ import * as THREE from 'three';
 import { FontLoader } from 'three/addons/loaders/FontLoader.js';
 import { highlight } from './highlight';
 import * as util from './util';
+import * as esprima from 'esprima';
 
-const textOffset = [-2, 2];
+const textOffset = [-3.5, 2];
 
 export class Editor {
   constructor(scene) {
-    this.mesh = util.createRoundedPlane(9, 5, 0.2);
+    this.mesh = util.createRoundedPlane(12, 5, 0.2);
     this.codeBlocks = [{text: "const x = 10;\nconsole.log('value = ' + x);",
                         index: 0}];
     this.tab = 0;
@@ -47,17 +48,26 @@ export class Editor {
         this.mesh.add(mesh);
       }
 
-      this.tabSelector = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 0.3),
+      this.tabSelector = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 0.3),
                                         new THREE.MeshBasicMaterial({color: 0x101010}));
-      this.tabSelector.position.set(-3.4, 2.06 - 0.3, 0.01);
+      this.tabSelector.position.set(textOffset[0] - 1.4, 2.06 - 0.3, 0.01);
       this.mesh.add(this.tabSelector);
 
-      const tabShapes = font.generateShapes("createSphe...\nbar\nsomething", 0.8);
-      this.tabText = new THREE.Mesh(new THREE.ShapeGeometry(tabShapes),
-                                    new THREE.MeshBasicMaterial({color: 0xffffff}));
-      this.tabText.scale.set(0.2, 0.2, 0.2);
-      this.tabText.position.set(textOffset[0] - 2.2, textOffset[1], 0.02);
-      this.mesh.add(this.tabText);
+      const tabShapes = font.generateShapes("", 0.8);
+      const tabGeometry = new THREE.ShapeGeometry(tabShapes);
+      const tabMaterial = new THREE.MeshBasicMaterial({color: 0xffffff});
+      this.tabTexts = [];
+
+      for (let i = 0; i < 10; i++) {
+        const tabText = new THREE.Mesh(tabGeometry, tabMaterial);
+        tabText.scale.set(0.15, 0.15, 0.15);
+        tabText.position.set(textOffset[0] - 2.35,
+                             textOffset[1] - i * 0.35,
+                             0.02);
+        tabText.saved = true;
+        this.mesh.add(tabText);
+        this.tabTexts.push(tabText);
+      }
 
       this.update();
     });
@@ -93,6 +103,45 @@ export class Editor {
     block.index = this.getTotal(row) + col;
   }
 
+  getTabTitle (text, saved) {
+    text = text.trim();
+    let title = "";
+
+    const nextToken = (t, i, stop) => {
+      const index = text.indexOf(stop);
+      if (index === -1) {
+        return t.slice(i).trim();
+      }
+      else {
+        return t.slice(i, index).trim();
+      }
+    };
+
+    if (text.startsWith(">")) {
+      title = "terminal";
+    }
+    else if (text.startsWith("//")) {
+      title = text.split("\n")[0].slice(2).trim();
+    }
+    else if (text.startsWith("function")) {
+      title = nextToken(text, 8, "(");
+    }
+    else if (text.startsWith("const")) {
+      title = nextToken(text, 5, "=");
+    }
+    else {
+      title = text.split("\n")[0];
+    }
+
+    title = (saved ? "" : "* ") + title;
+
+    if (title.length > 20) {
+      title = title.slice(0, 17) + "...";
+    }
+
+    return title;
+  }
+
   update () {
     const block = this.codeBlocks[this.tab];
     const result = highlight(block.text);
@@ -100,7 +149,9 @@ export class Editor {
     result.black = block.text;
     result.black = result.black.replace(/[\x20-\x7E]/gs, ' ');
     if (block.index !== block.text.length) {
-      result.black = util.replaceChar(result.black, block.index, block.text[block.index]);
+      result.black = util.replaceChar(result.black,
+                                      block.index,
+                                      block.text[block.index]);
     }
 
     for (let color of Object.keys(result)) {
@@ -119,20 +170,21 @@ export class Editor {
                              textOffset[1] + 0.1 - 0.39 * row,
                              0.01);
 
-    this.tabSelector.position.y = 2.06 - 0.3 * this.tab;
-    this.tabText.geometry.dispose();
+    this.tabSelector.position.y = 2.06 - 0.35 * this.tab;
 
-    let text = "";
     for (let i = 0; i < this.codeBlocks.length; i++) {
-      text += "" + i + "\n";
+      const tabText = this.tabTexts[i];
+      tabText.geometry.dispose();
+      let title = this.getTabTitle(this.codeBlocks[i].text, tabText.saved);
+      const shapes = this.font.generateShapes(title, 0.8);
+      tabText.geometry = new THREE.ShapeGeometry(shapes);
     }
-    const shapes = this.font.generateShapes(text, 0.8);
-    this.tabText.geometry = new THREE.ShapeGeometry(shapes);
   }
 
   insert (key) {
     const block = this.codeBlocks[this.tab];
     const [before, after] = util.splitText(block.text, block.index);
+    this.tabTexts[this.tab].saved = false;
     block.text = before + key + after;
     block.index += 1;
     this.update();
@@ -143,7 +195,7 @@ export class Editor {
     if (x < 0) {
       block.index = Math.max(0, block.index - 1);
     } else if (x > 0) {
-      block.index = Math.min(block.index + 1, block.text.length);
+      block.index = Math.min(block.index + x, block.text.length);
     }
     else if (y < 0) {
       const [row, col] = this.getRowCol();
@@ -164,6 +216,7 @@ export class Editor {
   erase (offset) {
     const block = this.codeBlocks[this.tab];
     const [before, after] = util.splitText(block.text, block.index);
+    this.tabTexts[this.tab].saved = false;
     if (offset < 0) {
       block.text = before.substring(0, before.length + offset) + after;
       block.index = Math.max(0, block.index + offset);
@@ -173,10 +226,61 @@ export class Editor {
     this.update();
   }
 
+  getGlobals (code) {
+    const ast = esprima.parseScript(code);
+    const topLevelIdentifiers = [];
+    for (const statement of ast.body) {
+      if (statement.type === 'FunctionDeclaration') {
+        topLevelIdentifiers.push(statement.id.name);
+      } else if (statement.type === 'VariableDeclaration') {
+        for (const declaration of statement.declarations) {
+          topLevelIdentifiers.push(declaration.id.name);
+        }
+      }
+    }
+    return topLevelIdentifiers;
+  }
+
+  parseCommand (code) {
+    const trimmed = code.trim();
+    if (trimmed.startsWith(">")) {
+      const lines = trimmed.split("\n");
+      const line = lines[lines.length - 1]
+      const parts =  line.trim().slice(1).match(/(["'])(\\?.)*?\1|\S+/g);
+
+      if (!parts) {
+        return '';
+      }
+      const functionName = parts.shift();
+
+      const functionArgs = parts.map(arg => {
+        if ((arg.startsWith("'") && arg.endsWith("'")) ||
+            (arg.startsWith('"') && arg.endsWith('"'))) {
+          return arg;
+        } else if (isNaN(arg)) {
+          return `"${arg}"`;
+        } else {
+          return arg;
+        }
+      }).join(", ");
+
+      return `${functionName}(${functionArgs});`;
+    } else {
+      return code;
+    }
+  }
+
   execute () {
+    const text = this.parseCommand(this.codeBlocks[this.tab].text);
+    const globals = this.getGlobals(text)
+          .map(x => `window.${x} = ${x};`).join("\n");
+
     const code = `import * as THREE from 'three';
+                  import * as util from './util';
+
                   export function run (scene) {
-                    ${this.codeBlocks[this.tab].text}
+                    ${text}
+                    ${globals}
                   }
                  // ${Date.now()}`;
 
@@ -187,6 +291,19 @@ export class Editor {
       },
       body: code
     });
+  }
+
+  handleOutput (output) {
+    if (this.codeBlocks[this.tab].text.trim().startsWith(">")) {
+      this.codeBlocks[this.tab].text += '\n' + output + '> ';
+      this.codeBlocks[this.tab].index = this.codeBlocks[this.tab].text.length;
+
+      this.update();
+    }
+    else {
+      // other output
+      console.log(["###", output]);
+    }
   }
 
   nextBlock () {
@@ -202,21 +319,35 @@ export class Editor {
 
   onKeyDown (event) {
     if (event.ctrlKey && event.shiftKey) {
-      if (event.key === "F") {
+      if (event.key === "J") {
         this.execute();
+        this.tabTexts[this.tab].saved = true;
+        this.update();
       }
       else if (event.key === "Tab") {
         this.previousBlock();
       }
     }
     else if (event.ctrlKey) {
-      if (event.key === "Tab") {
+      if (event.key.match(/^[0-9]$/)) {
+        const index = parseInt(event.key);
+
+        if (index < this.codeBlocks.length) {
+          this.tab = index;
+          this.update();
+        }
+      }
+      else if (event.key === "Tab") {
         this.nextBlock();
       }
       else if (event.key === "t") {
         this.codeBlocks.push({text: "", index: 0});
         this.tab = this.codeBlocks.length - 1;
         this.update();
+      }
+      else if (event.key === "p") {
+        this.insert("console.log();");
+        this.moveCursor(11, 0);
       }
     }
     else if (event.key === "Backspace") {

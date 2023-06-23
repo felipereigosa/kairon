@@ -10,6 +10,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "electron": "^25.1.1",
+    "esprima": "^4.0.1",
     "fs": "^0.0.1-security",
     "highlight.js": "^11.8.0",
     "jquery": "^3.7.0",

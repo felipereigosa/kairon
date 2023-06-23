@@ -16,7 +16,7 @@ export function createRoundedPlane (width, height, radius) {
   shape.quadraticCurveTo(left, top, left, top + radius);
 
   const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth: 0,
+    depth: 0.0001,
     bevelEnabled: false
   });
 
@@ -43,3 +43,5 @@ export function splitText (text, index) {
   const after = text.substring(index);
   return [before, after];
 }
+
+export const toRad = THREE.MathUtils.degToRad;

@@ -27,7 +27,7 @@ function useColors (code) {
 function removeAllSpans (code) {
   return code.replace(/<span class=".*?">(.*?)<\/span>/gs,
                       function(match, contents) {
-                        return " ".repeat(contents.length);
+                        return contents.replace(/[^\n]/g, ' ');
                       });
 }
 
@@ -64,8 +64,25 @@ function subtractStrings (s1, s2) {
   return result;
 }
 
+function highlightTerminal (code) {
+  const lines = code.split('\n');
+  return lines.map(l => {
+    if (l.trim().startsWith(">")) {
+      return `<span class="green">${l}</span>`;
+    } else {
+      return l;
+    }
+  }).join('\n');
+}
+
 export function highlight (code) {
-  let temp = hljs.highlight(code, {language: 'javascript'}).value;
+  let temp;
+  if (code.trim().startsWith(">")) {
+    temp = highlightTerminal(code);
+  }
+  else {
+    temp = hljs.highlight(code, {language: 'javascript'}).value;
+  }
 
   temp = removeQuotedSpans(temp);
   temp = useColors(temp);
@@ -76,7 +93,6 @@ export function highlight (code) {
   temp = temp.replace(/&#x27;/g, "'");
 
   const rest = removeAllSpans(temp);
-
   const result = {};
   const colors = [...new Set(Object.values(colorMap))]
   for (let color of colors) {

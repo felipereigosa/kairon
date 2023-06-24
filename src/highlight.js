@@ -1,6 +1,6 @@
 
 const hljs = require('highlight.js');
-const jquery = require('jquery');
+import { colors } from './colors';
 
 const colorMap = {"hljs-keyword": "blue",
                   "hljs-string": "orange",
@@ -13,6 +13,7 @@ const colorMap = {"hljs-keyword": "blue",
                   "hljs-property": "teal",
                   "hljs-variable language_": "purple",
                   "hljs-variable constant_": "red",
+                  "hljs-subst": "red",
                  };
 
 function useColors (code) {
@@ -20,46 +21,6 @@ function useColors (code) {
   for (let key of Object.keys(colorMap)) {
     let regex = new RegExp(`class="${key}"`, 'g');
     result = result.replace(regex, `class="${colorMap[key]}"`);
-  }
-  return result;
-}
-
-function removeAllSpans (code) {
-  return code.replace(/<span class=".*?">(.*?)<\/span>/gs,
-                      function(match, contents) {
-                        return contents.replace(/[^\n]/g, ' ');
-                      });
-}
-
-function removeColorSpans (code, color) {
-  const regex = new RegExp(`<span class="${color}">(.*?)<\/span>`, 'gs');
-  return code.replace(regex, "$1");
-}
-
-function removeQuotedSpans (code) {
-  const temp = jquery(`<div>${code}</div>`);
-  temp.find('span.hljs-string').each(function() {
-    let t = jquery(this);
-    t.text(t.text())
-  });
-  return temp.html();
-}
-
-function getColor (code, rest, color) {
-  let result = code;
-  result = removeColorSpans(result, color);
-  result = removeAllSpans(result);
-  return subtractStrings(result, rest);
-}
-
-function subtractStrings (s1, s2) {
-  let result = '';
-  for (let i = 0; i < s1.length; i++) {
-    if (s1[i] === s2[i] && s1[i] !== '\n') {
-      result += ' ';
-    } else {
-      result += s1[i];
-    }
   }
   return result;
 }
@@ -76,28 +37,50 @@ function highlightTerminal (code) {
 }
 
 export function highlight (code) {
-  let temp;
   if (code.trim().startsWith(">")) {
-    temp = highlightTerminal(code);
+    code = highlightTerminal(code);
   }
   else {
-    temp = hljs.highlight(code, {language: 'javascript'}).value;
+    code = hljs.highlight(code, {language: 'javascript'}).value;
   }
 
-  temp = removeQuotedSpans(temp);
-  temp = useColors(temp);
-  temp = temp.replace(/&quot;/g, '"');
-  temp = temp.replace(/&gt;/g, '>');
-  temp = temp.replace(/&lt;/g, '<');
-  temp = temp.replace(/&amp;/g, '&');
-  temp = temp.replace(/&#x27;/g, "'");
+  code = useColors(code);
+  code = code.replace(/&quot;/g, '"');
+  code = code.replace(/&gt;/g, '>');
+  code = code.replace(/&lt;/g, '<');
+  code = code.replace(/&amp;/g, '&');
+  code = code.replace(/&#x27;/g, "'");
 
-  const rest = removeAllSpans(temp);
-  const result = {};
-  const colors = [...new Set(Object.values(colorMap))]
-  for (let color of colors) {
-    result[color] = getColor(temp, rest, color);
+  let colorStack = ['white'];
+  let colorDict = Object.keys(colors)
+      .reduce((dict, color) => ({...dict, [color]: ''}), {});
+
+  while (code.length > 0) {
+    let span = code.match(/^<\/?span[^>]*>/g);
+
+    if (span) {
+      span = span[0];
+      if (span.startsWith('</')) {
+        colorStack.pop();
+      }
+      else {
+        let color = span.match(/class="([^"]*)"/)[1];
+        colorStack.push(color);
+      }
+      code = code.substring(span.length);
+    }
+    else {
+      let currentColor = colorStack[colorStack.length - 1];
+      Object.keys(colorDict).forEach(color => {
+        if (color === currentColor || code[0] === '\n') {
+          colorDict[color] += code[0];
+        }
+        else {
+          colorDict[color] += ' ';
+        }
+      });
+      code = code.substring(1);
+    }
   }
-  result['white'] = rest;
-  return result;
+  return colorDict;
 }

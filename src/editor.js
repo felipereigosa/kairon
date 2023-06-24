@@ -1,16 +1,16 @@
 import * as THREE from 'three';
 import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+import * as esprima from 'esprima';
 import { highlight } from './highlight';
 import * as util from './util';
-import * as esprima from 'esprima';
+import { colors } from './colors';
 
 const textOffset = [-3.5, 2];
 
 export class Editor {
   constructor(scene) {
     this.mesh = util.createRoundedPlane(12, 5, 0.2);
-    this.codeBlocks = [{text: "const x = 10;\nconsole.log('value = ' + x);",
-                        index: 0}];
+    this.codeBlocks = [{text: "", index: 0}];
     this.tab = 0;
     this.cursor = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.3),
                                  new THREE.MeshBasicMaterial({color: 0xffffff}));
@@ -26,19 +26,6 @@ export class Editor {
       const template = new THREE.Mesh(geometry, material);
       template.scale.set(0.2, 0.2, 0.2);
       template.position.set(textOffset[0], textOffset[1], 0.02);
-
-      const colors = {"red": 0xff0020,
-                      "green": 0x20ff20,
-                      "white": 0xffffff,
-                      "blue": 0x2020ff,
-                      "orange": 0xffa020,
-                      "gray": 0x808080,
-                      "yellow": 0xffff20,
-                      "lightblue": 0x20ffff,
-                      "purple": 0x710096,
-                      "teal": 0x008080,
-                      "black": 0x000000,
-                     };
 
       for (let color of Object.keys(colors)) {
         const mesh = template.clone();
@@ -181,19 +168,18 @@ export class Editor {
     }
   }
 
-  insert (key) {
+  insert (text) {
     const block = this.codeBlocks[this.tab];
     const [before, after] = util.splitText(block.text, block.index);
     this.tabTexts[this.tab].saved = false;
-    block.text = before + key + after;
-    block.index += 1;
-    this.update();
+    block.text = before + text + after;
+    block.index += text.length;
   }
 
   moveCursor (x, y) {
     const block = this.codeBlocks[this.tab];
     if (x < 0) {
-      block.index = Math.max(0, block.index - 1);
+      block.index = Math.max(0, block.index + x);
     } else if (x > 0) {
       block.index = Math.min(block.index + x, block.text.length);
     }
@@ -210,7 +196,6 @@ export class Editor {
         this.setRowCol(row + 1, col);
       }
     }
-    this.update();
   }
 
   erase (offset) {
@@ -223,7 +208,6 @@ export class Editor {
     } else {
       block.text = before + after.substring(offset);
     }
-    this.update();
   }
 
   getGlobals (code) {
@@ -308,33 +292,121 @@ export class Editor {
 
   nextBlock () {
     this.tab = (this.tab + 1) % this.codeBlocks.length;
-    this.update();
   }
 
   previousBlock () {
     const len = this.codeBlocks.length;
     this.tab = (this.tab - 1 + len) % this.codeBlocks.length;
-    this.update();
+  }
+
+  calculateIndentation (code) {
+    let indent = 0;
+    let openBraces = 0;
+    let closeBraces = 0;
+
+    for (let i = 0; i < code.length; i++) {
+      if (code[i] === "{") {
+        openBraces++;
+      }
+      else if (code[i] === "}") {
+        closeBraces++;
+      }
+    }
+
+    if (openBraces > closeBraces) {
+      indent = (openBraces - closeBraces) * 2;
+    }
+
+    let indentString = "";
+    for (let i = 0; i < indent; i++) {
+      indentString += " ";
+    }
+
+    return indentString;
+  }
+
+  newLine () {
+    const block = this.codeBlocks[this.tab];
+    const [before, after] = util.splitText(block.text, block.index);
+    const indent = this.calculateIndentation(before);
+    block.text = before + "\n" + indent + after;
+    block.index += indent.length + 1;
+  }
+
+  prevWordIndex (text, index) {
+    let r = /[a-zA-Z0-9_$]/g;
+    index -= 2;
+    while ((r.lastIndex = 0, !r.test(text[index])) ||
+           (r.lastIndex = 0, r.test(text[index - 1]))) {
+      index -= 1;
+
+      if (index < 0) {
+        index = 0;
+        break;
+      }
+    }
+    return index;
+  }
+
+  nextWordIndex (text, index) {
+    let r = /[a-zA-Z0-9_$]/g;
+    index += 1;
+    while ((r.lastIndex = 0, !r.test(text[index])) ||
+           (r.lastIndex = 0, r.test(text[index + 1]))) {
+      index += 1;
+      if (index >= text.length) {
+        index = text.length - 1;
+        break;
+      }
+    }
+    return index + 1;
   }
 
   onKeyDown (event) {
-    if (event.ctrlKey && event.shiftKey) {
+    const block = this.codeBlocks[this.tab];
+
+    if (event.altKey && event.shiftKey) {
+      if (event.key === "<") {
+        block.index = 0;
+      }
+      else if (event.key === ">") {
+        block.index = block.text.length;
+      }
+    }
+    else if (event.ctrlKey && event.shiftKey) {
       if (event.key === "J") {
         this.execute();
         this.tabTexts[this.tab].saved = true;
-        this.update();
       }
+      else if (event.key === "P") {
+        this.insert("console.log();");
+        this.moveCursor(-2, 0);
+       }
       else if (event.key === "Tab") {
         this.previousBlock();
+      }
+    }
+    else if (event.altKey) {
+      if (event.key === "f") {
+        block.index = this.nextWordIndex(block.text, block.index);
+      }
+      else if (event.key === "b") {
+        block.index = this.prevWordIndex(block.text, block.index);
+      }
+      else if (event.key === "d") {
+        const index = this.nextWordIndex(block.text, block.index);
+        this.erase(index - block.index);
+      }
+      else if (event.key === "Backspace") {
+        const index = this.prevWordIndex(block.text, block.index);
+        this.erase(index - block.index);
       }
     }
     else if (event.ctrlKey) {
       if (event.key.match(/^[0-9]$/)) {
         const index = parseInt(event.key);
-
         if (index < this.codeBlocks.length) {
           this.tab = index;
-          this.update();
         }
       }
       else if (event.key === "Tab") {
@@ -343,11 +415,40 @@ export class Editor {
       else if (event.key === "t") {
         this.codeBlocks.push({text: "", index: 0});
         this.tab = this.codeBlocks.length - 1;
-        this.update();
+      }
+      else if (event.key === "j") {
+        this.newLine();
+      }
+      else if (event.key === "k") {
+        let index = block.text.indexOf("\n", block.index);
+        if (index === -1) {
+          index = block.text.length;
+        }
+        let l = block.text.substring(block.index, index).length;
+        if (l === 0) l = 1;
+        this.erase(l);
+      }
+      else if (event.key === "d") {
+        this.erase(1);
+      }
+      else if (event.key === "f") {
+        this.moveCursor(1, 0);
+      }
+      else if (event.key === "b") {
+        this.moveCursor(-1, 0);
+      }
+      else if (event.key === "n") {
+        this.moveCursor(0, 1);
       }
       else if (event.key === "p") {
-        this.insert("console.log();");
-        this.moveCursor(11, 0);
+        this.moveCursor(0, -1);
+      }
+      else if (event.key === "e") {
+        block.index = block.text.indexOf("\n", block.index);
+        if (block.index === -1) block.index = block.text.length;
+      }
+      else if (event.key === "a") {
+        block.index = block.text.lastIndexOf("\n", block.index - 1) + 1;
       }
     }
     else if (event.key === "Backspace") {
@@ -357,7 +458,7 @@ export class Editor {
       this.erase(1);
     }
     else if (event.key === "Enter") {
-      this.insert("\n");
+      this.newLine();
     }
     else if (event.key === "ArrowLeft") {
       this.moveCursor(-1, 0);
@@ -371,11 +472,24 @@ export class Editor {
     else if (event.key === "ArrowDown") {
       this.moveCursor(0, 1);
     }
-    else if (util.isPrintable(event.key) && event.key.length === 1) {
-      this.insert(event.key);
+    else if (event.key === "}") {
+      const text = block.text.substring(0, block.index);
+      const indent = this.calculateIndentation(text);
+      const indent2 = this.calculateIndentation(text + "}");
+      const start = text.lastIndexOf("\n");
+      const line = text.substring(start + 1).replace(/ /g, "");
+
+      if (indent2.length < indent.length && line === "") {
+        this.erase(-2);
+      }
+      this.insert("}");
     }
     else if (event.key === "Tab") {
       this.insert("  ");
     }
+    else if (util.isPrintable(event.key) && event.key.length === 1) {
+      this.insert(event.key);
+    }
+    this.update();
   }
 }

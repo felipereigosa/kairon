@@ -8,12 +8,13 @@
     "input": "electron input"
   },
   "dependencies": {
+    "cannon-es": "^0.20.0",
     "cors": "^2.8.5",
     "electron": "^25.1.1",
     "esprima": "^4.0.1",
     "fs": "^0.0.1-security",
     "highlight.js": "^11.8.0",
-    "three": "^0.153.0"
+    "three": "^0.154.0"
   },
   "devDependencies": {
     "copy-webpack-plugin": "^11.0.0",

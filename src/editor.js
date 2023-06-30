@@ -263,8 +263,12 @@ export class Editor {
                   import * as util from './util';
 
                   export function run (scene) {
-                    ${text}
-                    ${globals}
+                    try {
+                      ${text}
+                      ${globals}
+                    } catch (error) {
+                      console.log(error);
+                    }
                   }
                  // ${Date.now()}`;
 

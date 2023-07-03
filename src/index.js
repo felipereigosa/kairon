@@ -37,11 +37,21 @@ function pollControllers () {
         const buttons = source.gamepad.buttons.map((b) => b.value);
         for (let i = 0; i < 7; i++) {
           if (buttons[i] > 0.5 && oldState[source.handedness].buttons[i] < 0.5) {
-            buttonPressed(source.handedness, buttonNames[i]);
+            try {
+              buttonPressed(source.handedness, buttonNames[i]);
+            }
+            catch (error) {
+              console.log(`input error ${error}`);
+            }
           }
           else if (buttons[i] === 0 &&
                    oldState[source.handedness].buttons[i] !== 0) {
-            buttonReleased(source.handedness, buttonNames[i]);
+            try {
+              buttonReleased(source.handedness, buttonNames[i]);
+            }
+            catch (error) {
+              console.log(`input error ${error}`);
+            }
           }
         }
         oldState[source.handedness].buttons = [...buttons];
@@ -160,75 +170,81 @@ function constrainAvatar () {
 }
 
 function init () {
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color().setHSL( 0.6, 0, 1 );
-  scene.fog = new THREE.Fog( scene.background, 1, 5000 );
-  avatar = new THREE.Group();
-  const width = window.innerWidth;
-  const height = window.innerHeight;
-  camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 5000);
-  camera.position.set(0, 1, 3);
+  try {
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color().setHSL( 0.6, 0, 1 );
+    scene.fog = new THREE.Fog( scene.background, 1, 5000 );
+    avatar = new THREE.Group();
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 5000);
+    camera.position.set(0, 1, 2.2);
 
-  avatar.add(camera);
-  avatar.controllers = {};
-  avatar.speed = 0.015;
-  scene.add(avatar);
+    avatar.add(camera);
+    avatar.controllers = {};
+    avatar.speed = 0.015;
+    scene.add(avatar);
 
-  physics = new CANNON.World();
-  physics.gravity.set(0, -9.82, 0);
-  physics.allowSleep = true;
+    physics = new CANNON.World();
+    physics.gravity.set(0, -9.82, 0);
+    physics.allowSleep = true;
 
-  createEnvironment();
+    createEnvironment();
 
-  renderer = new THREE.WebGLRenderer({antialias: true});
-  renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.xr.enabled = true;
-  renderer.shadowMap.enabled = true;
-  document.body.appendChild(renderer.domElement);
-  renderer.xr.addEventListener('sessionstart', () => {
-    entered = true;
-  });
+    renderer = new THREE.WebGLRenderer({antialias: true});
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true;
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+    renderer.xr.addEventListener('sessionstart', () => {
+      entered = true;
+    });
+    renderer.localClippingEnabled = true;
 
-  document.body.appendChild(VRButton.createButton(renderer));
+    document.body.appendChild(VRButton.createButton(renderer));
 
-  const leftController = renderer.xr.getControllerGrip(0);
-  leftController.name = 'left_controller';
-  leftController.velocityEstimator = new VelocityEstimator();
-  avatar.add(leftController);
-  avatar.controllers['left'] = leftController;
+    const leftController = renderer.xr.getControllerGrip(0);
+    leftController.name = 'left_controller';
+    leftController.velocityEstimator = new VelocityEstimator();
+    avatar.add(leftController);
+    avatar.controllers['left'] = leftController;
 
-  const rightController = renderer.xr.getControllerGrip(1);
-  rightController.name = 'right_controller';
-  rightController.velocityEstimator = new VelocityEstimator();
-  avatar.add(rightController);
-  avatar.controllers['right'] = rightController;
+    const rightController = renderer.xr.getControllerGrip(1);
+    rightController.name = 'right_controller';
+    rightController.velocityEstimator = new VelocityEstimator();
+    avatar.add(rightController);
+    avatar.controllers['right'] = rightController;
 
-  const loader = new GLTFLoader();
+    const loader = new GLTFLoader();
 
-  loader.load("hand.glb",
-              function (gltf) {
-                const rightHand = gltf.scene;
-                rightHand.name = 'right_hand';
-                rightController.add(rightHand);
-                rightHand.clips = gltf.animations;
-                rightHand.mixer = new THREE.AnimationMixer(gltf.scene);
-                rightHand.scale.set(0.95, 0.95, 0.95);
+    loader.load("hand.glb",
+                function (gltf) {
+                  const rightHand = gltf.scene;
+                  rightHand.name = 'right_hand';
+                  rightController.add(rightHand);
+                  rightHand.clips = gltf.animations;
+                  rightHand.mixer = new THREE.AnimationMixer(gltf.scene);
+                  rightHand.scale.set(0.95, 0.95, 0.95);
 
-                const leftHand = util.clone(rightHand);
-                leftHand.name = 'left_hand';
-                leftHand.scale.set(-0.95, 0.95, 0.95);
-                leftHand.clips = gltf.animations;
-                leftHand.mixer = new THREE.AnimationMixer(gltf.scene);
-                leftController.add(leftHand);
+                  const leftHand = util.clone(rightHand);
+                  leftHand.name = 'left_hand';
+                  leftHand.scale.set(-0.95, 0.95, 0.95);
+                  leftHand.clips = gltf.animations;
+                  leftHand.mixer = new THREE.AnimationMixer(gltf.scene);
+                  leftController.add(leftHand);
 
-                renderer.setAnimationLoop(render);
-              });
+                  renderer.setAnimationLoop(render);
+                });
 
-  editor = new Editor();
-  editor.mesh.position.set(0, 1, -2);
-  editor.mesh.scale.set(0.2, 0.2, 0.2);
-  scene.add(editor.mesh);
+    editor = new Editor();
+    editor.mesh.position.set(0, 1, 0);
+    editor.mesh.scale.set(0.2, 0.2, 0.2);
+    scene.add(editor.mesh);
+  }
+  catch (error) {
+    console.log(`init error ${error}`);
+  }
 }
 
 function move () {
@@ -366,37 +382,42 @@ const position = new THREE.Vector3();
 const quaternion = new THREE.Quaternion();
 
 function render () {
-  renderer.render(scene, camera);
+  try {
+    renderer.render(scene, camera);
 
-  if (entered) {
-    physics.fixedStep();
-    pollControllers();
-    move();
-    turn();
+    if (entered) {
+      physics.fixedStep();
+      pollControllers();
+      move();
+      turn();
 
-    const delta = clock.getDelta();
-    const rightHand = scene.getObjectByName("right_hand");
-    rightHand.mixer.update(delta);
-    const leftHand = scene.getObjectByName("left_hand");
-    leftHand.mixer.update(delta);
+      const delta = clock.getDelta();
+      const rightHand = scene.getObjectByName("right_hand");
+      rightHand.mixer.update(delta);
+      const leftHand = scene.getObjectByName("left_hand");
+      leftHand.mixer.update(delta);
 
-    const left = avatar.controllers.left;
-    const right = avatar.controllers.right;
-    scene.traverse((object) => {
-      if (object instanceof THREE.Mesh &&
-          object.interactable &&
-          object.body) {
-        if (object.parent === left || object.parent === right) {
-          object.getWorldPosition(position);
-          object.getWorldQuaternion(quaternion);
-          object.parent.velocityEstimator.recordPosition(position);
+      const left = avatar.controllers.left;
+      const right = avatar.controllers.right;
+      scene.traverse((object) => {
+        if (object instanceof THREE.Mesh &&
+            object.interactable &&
+            object.body) {
+          if (object.parent === left || object.parent === right) {
+            object.getWorldPosition(position);
+            object.getWorldQuaternion(quaternion);
+            object.parent.velocityEstimator.recordPosition(position);
+          }
+          else {
+            object.position.copy(object.body.position);
+            object.quaternion.copy(object.body.quaternion);
+          }
         }
-        else {
-          object.position.copy(object.body.position);
-          object.quaternion.copy(object.body.quaternion);
-        }
-      }
-    });
+      });
+    }
+  }
+  catch (error) {
+    console.log(`render error ${error}`);
   }
 }
 
@@ -409,10 +430,13 @@ source.onmessage = function(event) {
 };
 
 source.onerror = function(error) {
-  console.log(`Could not connect to server: ${error}`);
   source.close();
 };
 
 module.hot.accept('./code', function () {
   editor.handleOutput(util.getOutput(() => run(scene)));
 });
+
+document.onkeydown = function(event) {
+  editor.onKeyDown(event);
+};

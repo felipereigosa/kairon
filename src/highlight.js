@@ -14,6 +14,7 @@ const colorMap = {"hljs-keyword": "blue",
                   "hljs-variable language_": "purple",
                   "hljs-variable constant_": "red",
                   "hljs-subst": "red",
+                  "hljs-attr": "teal",
                  };
 
 function useColors (code) {
@@ -28,7 +29,7 @@ function useColors (code) {
 function highlightTerminal (code) {
   const lines = code.split('\n');
   return lines.map(l => {
-    if (l.trim().startsWith(">")) {
+    if (l.startsWith(">")) {
       return `<span class="green">${l}</span>`;
     } else {
       return l;
@@ -37,7 +38,7 @@ function highlightTerminal (code) {
 }
 
 export function highlight (code) {
-  if (code.trim().startsWith(">")) {
+  if (code.split('\n').some(line => line.startsWith(">"))) {
     code = highlightTerminal(code);
   }
   else {

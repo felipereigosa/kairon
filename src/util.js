@@ -78,14 +78,19 @@ export function signedAngle(v1, v2, axis) {
 }
 
 export function getOutput(func) {
-    let logOutput = '';
-    const originalLog = console.log;
-    console.log = function(message) {
-        logOutput += message + '\n';
-    };
-    func();
-    console.log = originalLog;
-    return logOutput;
+  let logOutput = '';
+  const originalLog = console.log;
+  console.log = function(message) {
+    if (Array.isArray(message) ||
+        (typeof message === 'object' && message !== null)) {
+      logOutput += JSON.stringify(message) + '\n';
+    } else {
+      logOutput += message + '\n';
+    }
+  };
+  func();
+  console.log = originalLog;
+  return logOutput;
 }
 
 export function clone(source) {
@@ -121,4 +126,8 @@ export function clone(source) {
   });
 
   return clone;
+}
+
+export function print (...args) {
+  console.log(args.join(" "));
 }

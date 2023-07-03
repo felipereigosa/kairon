@@ -1,5 +1,6 @@
 
 document.body.addEventListener('keydown', (event) => {
+  event.preventDefault();
   const simplifiedEvent = {
     key: event.key,
     ctrlKey: event.ctrlKey,

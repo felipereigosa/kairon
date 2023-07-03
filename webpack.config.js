@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const codePath = path.resolve(__dirname, 'src/code.js');
 const CopyPlugin = require('copy-webpack-plugin');
+const { exec } = require('child_process');
 
 module.exports = {
   mode: 'development',
@@ -26,7 +27,20 @@ module.exports = {
           });
         });
       });
-    }
+      app.post('/complete-code', function(req, res) {
+        let code = '';
+        req.on('data', chunk => {
+          code += chunk.toString();
+        });
+        req.on('end', () => {
+          exec(`emacsclient -e '(complete "${code}")'`,
+               (error, stdout, stderr) => {
+                 const data = JSON.parse(JSON.parse(stdout));
+                 res.json(data);
+               });
+        });
+      });
+    },
   },
 
   plugins: [

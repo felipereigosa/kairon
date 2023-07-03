@@ -1,5 +1,4 @@
 const { app, BrowserWindow, ipcMain } = require('electron')
-
 const express = require('express');
 const cors = require('cors');
 const path = require('path');

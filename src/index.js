@@ -12,10 +12,10 @@ let camera;
 let scene;
 let renderer;
 let physics;
-let entered = false;
+let entered;
 let avatar;
-const clock = new THREE.Clock();
 let editor;
+let timeSinceUpdate = 0;
 
 const buttonNames = ["trigger", "grab", "", "thumbstick", "x", "y", ""];
 let oldState = {left: {buttons: [0, 0, 0, 0, 0, 0, 0], axes: [0, 0]},
@@ -171,10 +171,12 @@ function constrainAvatar () {
 
 function init () {
   try {
+    entered = false;
     scene = new THREE.Scene();
     scene.background = new THREE.Color().setHSL( 0.6, 0, 1 );
     scene.fog = new THREE.Fog( scene.background, 1, 5000 );
     avatar = new THREE.Group();
+    avatar.clock = new THREE.Clock();
     const width = window.innerWidth;
     const height = window.innerHeight;
     camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 5000);
@@ -238,9 +240,13 @@ function init () {
                 });
 
     editor = new Editor();
-    editor.mesh.position.set(0, 1, 0);
-    editor.mesh.scale.set(0.2, 0.2, 0.2);
-    scene.add(editor.mesh);
+    editor.object.position.set(0, 1, 0);
+    editor.object.scale.set(0.2, 0.2, 0.2);
+    scene.add(editor.object);
+
+    scene.traverse(function (child) {
+      child.background = true;
+    });
   }
   catch (error) {
     console.log(`init error ${error}`);
@@ -255,6 +261,7 @@ function move () {
   if (direction.length() > 0.1) {
     direction.applyEuler(camera.rotation);
     direction.applyEuler(avatar.rotation);
+    direction.y = 0;
 
     direction.normalize();
     direction.multiplyScalar(avatar.speed);
@@ -267,7 +274,7 @@ function move () {
 let thumb = false;
 function turn () {
   const value = getAxes("right")[0];
-  const angleSize = util.toRad(45);
+  const angleSize = util.toRadians(45);
   if (value > 0.9 && !thumb) {
     thumb = true;
     avatar.rotation.y -= angleSize;
@@ -382,42 +389,45 @@ const position = new THREE.Vector3();
 const quaternion = new THREE.Quaternion();
 
 function render () {
-  try {
-    renderer.render(scene, camera);
+  if (timeSinceUpdate < 5000 || entered) {
+    try {
+      renderer.render(scene, camera);
+      const delta = avatar.clock.getDelta();
+      timeSinceUpdate += delta * 1000;
 
-    if (entered) {
-      physics.fixedStep();
-      pollControllers();
-      move();
-      turn();
+      if (entered) {
+        physics.fixedStep();
+        pollControllers();
+        move();
+        turn();
 
-      const delta = clock.getDelta();
-      const rightHand = scene.getObjectByName("right_hand");
-      rightHand.mixer.update(delta);
-      const leftHand = scene.getObjectByName("left_hand");
-      leftHand.mixer.update(delta);
+        const rightHand = scene.getObjectByName("right_hand");
+        rightHand.mixer.update(delta);
+        const leftHand = scene.getObjectByName("left_hand");
+        leftHand.mixer.update(delta);
 
-      const left = avatar.controllers.left;
-      const right = avatar.controllers.right;
-      scene.traverse((object) => {
-        if (object instanceof THREE.Mesh &&
-            object.interactable &&
-            object.body) {
-          if (object.parent === left || object.parent === right) {
-            object.getWorldPosition(position);
-            object.getWorldQuaternion(quaternion);
-            object.parent.velocityEstimator.recordPosition(position);
+        const left = avatar.controllers.left;
+        const right = avatar.controllers.right;
+        scene.traverse((object) => {
+          if (object instanceof THREE.Mesh &&
+              object.interactable &&
+              object.body) {
+            if (object.parent === left || object.parent === right) {
+              object.getWorldPosition(position);
+              object.getWorldQuaternion(quaternion);
+              object.parent.velocityEstimator.recordPosition(position);
+            }
+            else {
+              object.position.copy(object.body.position);
+              object.quaternion.copy(object.body.quaternion);
+            }
           }
-          else {
-            object.position.copy(object.body.position);
-            object.quaternion.copy(object.body.quaternion);
-          }
-        }
-      });
+        });
+      }
     }
-  }
-  catch (error) {
-    console.log(`render error ${error}`);
+    catch (error) {
+      console.log(`render error ${error}`);
+    }
   }
 }
 
@@ -425,8 +435,25 @@ init();
 
 const source = new EventSource('http://localhost:3000/events');
 source.onmessage = function(event) {
+  timeSinceUpdate = 0;
   const data = JSON.parse(event.data);
   editor.onKeyDown(data);
+
+  if (data.type === 'pointerdown') {
+    editor.onPointerDown(data);
+  }
+  else if (data.type === 'pointerup') {
+    editor.onPointerUp(data);
+  }
+  else if (data.type === 'pointermove') {
+    editor.onPointerMove(data);
+  }
+  else if (data.type === 'keydown') {
+    editor.onKeyDown(data);
+  }
+  else if (data.type === 'resize') {
+    editor.onResize(data);
+  }
 };
 
 source.onerror = function(error) {
@@ -436,7 +463,3 @@ source.onerror = function(error) {
 module.hot.accept('./code', function () {
   editor.handleOutput(util.getOutput(() => run(scene)));
 });
-
-document.onkeydown = function(event) {
-  editor.onKeyDown(event);
-};

@@ -40,4 +40,28 @@ ipcMain.on('keydown', (_, event) => {
   }
 });
 
+ipcMain.on('pointerdown', (_, event) => {
+  if (client) {
+    client.write(`data: ${JSON.stringify(event)}\n\n`);
+  }
+});
+
+ipcMain.on('pointermove', (_, event) => {
+  if (client) {
+    client.write(`data: ${JSON.stringify(event)}\n\n`);
+  }
+});
+
+ipcMain.on('pointerup', (_, event) => {
+  if (client) {
+    client.write(`data: ${JSON.stringify(event)}\n\n`);
+  }
+});
+
+ipcMain.on('resize', (_, event) => {
+  if (client) {
+    client.write(`data: ${JSON.stringify(event)}\n\n`);
+  }
+});
+
 app.whenReady().then(createWindow)

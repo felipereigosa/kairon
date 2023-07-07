@@ -1,6 +1,7 @@
 
 const hljs = require('highlight.js');
 import { colors } from './colors';
+import * as util from './util';
 
 const colorMap = {"hljs-keyword": "blue",
                   "hljs-string": "orange",
@@ -38,7 +39,7 @@ function highlightTerminal (code) {
 }
 
 export function highlight (code) {
-  if (code.split('\n').some(line => line.startsWith(">"))) {
+  if (util.isTerminal(code)) {
     code = highlightTerminal(code);
   }
   else {

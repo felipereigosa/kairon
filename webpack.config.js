@@ -2,6 +2,7 @@ const HtmlWebpackPlugin = require('html-webpack-plugin');
 const fs = require('fs');
 const path = require('path');
 const codePath = path.resolve(__dirname, 'src/code.js');
+const savePath = path.resolve(__dirname, 'state.js');
 const CopyPlugin = require('copy-webpack-plugin');
 const { exec } = require('child_process');
 
@@ -27,6 +28,7 @@ module.exports = {
           });
         });
       });
+
       app.post('/complete-code', function(req, res) {
         let code = '';
         req.on('data', chunk => {
@@ -38,6 +40,34 @@ module.exports = {
                  const data = JSON.parse(JSON.parse(stdout));
                  res.json(data);
                });
+        });
+      });
+
+      app.post('/save', function(req, res) {
+        let body = '';
+        req.on('data', chunk => {
+          body += chunk.toString();
+        });
+        req.on('end', () => {
+          fs.writeFile(savePath, body, err => {
+            if (err) {
+              console.error(err);
+              res.sendStatus(500);
+            } else {
+              res.sendStatus(200);
+            }
+          });
+        });
+      });
+
+      app.post('/open', function(req, res) {
+        fs.readFile(savePath, 'utf8', (err, data) => {
+          if (err) {
+            console.error(err);
+          }
+          else {
+            res.json(JSON.parse(data));
+          }
         });
       });
     },

@@ -4,18 +4,51 @@ import * as esprima from 'esprima';
 import { highlight } from './highlight';
 import * as util from './util';
 import { colors } from './colors';
+import { Tab } from './tab';
 
 const textOffset = [-4.5, 2];
 
 export class Editor {
-  constructor(scene) {
-    this.mesh = util.createRoundedPlane(14, 5, 0.2);
-    this.codeBlocks = [{text: "", index: 0, offset: 0}];
-    this.tab = 0;
+  constructor () {
+    this.object = util.createRoundedPlane(14, 5, 0.2);
+    this.object.renderOrder = 0;
+    this.currentTab = 0;
+
     this.cursor = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.3),
                                  new THREE.MeshBasicMaterial({color: 0xffffff}));
     this.cursor.position.set(textOffset[0] + 0.08, textOffset[1] + 0.1, 0.01);
-    this.mesh.add(this.cursor);
+    this.object.add(this.cursor);
+
+    this.selector = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 0.3),
+                                   new THREE.MeshBasicMaterial({color: 0x101010}));
+    this.selector.position.set(textOffset[0] - 1.4, 2.06 - 0.35, 0.01);
+    this.object.add(this.selector);
+
+    const divider = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
+                                   new THREE.MeshBasicMaterial({color: 0xaaaaaa}));
+    divider.position.set(textOffset[0] - 0.3, 0, 0.01);
+    divider.scale.set(0.01, 4.5, 1);
+    this.object.add(divider);
+
+    this.pointer = new THREE.Group();
+    this.pointer.position.z = 0.03;
+    const dot = new THREE.Mesh(new THREE.CircleGeometry(0.05, 32),
+                               new THREE.MeshBasicMaterial({color: 'red'}));
+    const square = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.15),
+                                  new THREE.MeshBasicMaterial({color: 'white'}));
+    const halo = new THREE.Mesh(new THREE.CircleGeometry(0.2, 32),
+                                new THREE.MeshBasicMaterial({color: 0,
+                                                             transparent: true,
+                                                             opacity: 0.3}));
+    halo.renderOrder = 2;
+    this.pointer.add(halo);
+    halo.position.z = -0.01;
+    this.pointer.add(square);
+    square.visible = false;
+    this.pointer.add(dot);
+    this.object.add(this.pointer);
+
+    this.pointer.visible = false;
 
     const fontLoader = new FontLoader();
     fontLoader.load('/droid_sans_mono_regular.typeface.json', (font) => {
@@ -26,62 +59,54 @@ export class Editor {
       const template = new THREE.Mesh(geometry, material);
       template.scale.set(0.2, 0.2, 0.2);
       template.position.set(textOffset[0], textOffset[1], 0.02);
-
-      let bottomPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0.48);
-      let topPlane = new THREE.Plane(new THREE.Vector3(0, -1, 0), 0.45);
-      material.clippingPlanes = [bottomPlane, topPlane];
+      material.clippingPlanes = [...Array(3)].map(() => new THREE.Plane());
 
       for (let color of Object.keys(colors)) {
         const mesh = template.clone();
         mesh.name = color;
         mesh.material = template.material.clone();
         mesh.material.color.set(colors[color]);
-        this.mesh.add(mesh);
+        this.object.add(mesh);
       }
 
-      this.tabSelector = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 0.3),
-                                        new THREE.MeshBasicMaterial({color: 0x101010}));
-      this.tabSelector.position.set(textOffset[0] - 1.4, 2.06 - 0.3, 0.01);
-      this.mesh.add(this.tabSelector);
-
-      const tabShapes = font.generateShapes("", 0.8);
-      const tabGeometry = new THREE.ShapeGeometry(tabShapes);
-      const tabMaterial = new THREE.MeshBasicMaterial({color: 0xffffff});
-      this.tabTexts = [];
-
-      for (let i = 0; i < 10; i++) {
-        const tabText = new THREE.Mesh(tabGeometry, tabMaterial);
-        tabText.scale.set(0.15, 0.15, 0.15);
-        tabText.position.set(textOffset[0] - 2.35,
-                             textOffset[1] - i * 0.35,
-                             0.02);
-        tabText.saved = true;
-        this.mesh.add(tabText);
-        this.tabTexts.push(tabText);
-      }
+      this.tabs = [];
+      this.newTab("", 0);
 
       this.updateClippingPlanes();
       this.update();
     });
+  }
 
-    const divider = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
-                                   new THREE.MeshBasicMaterial({color: 0xaaaaaa}));
-    divider.position.set(textOffset[0] - 0.3, 0, 0.01);
-    divider.scale.set(0.01, 4.5, 1);
+  newTab (text, index) {
+    const tab = new Tab();
+    tab.text = text;
+    tab.index = index;
+    tab.canvas.pointer = this.pointer;
+    this.object.add(tab.object);
+    this.tabs.push(tab);
+  }
 
-    this.mesh.add(divider);
+  deleteTab (i) {
+    this.object.remove(this.tabs[i].object);
+    this.tabs.splice(i, 1);
+    if (this.tabs.length === 0) {
+      this.newTab("", 0);
+    }
+    if (this.currentTab >= this.tabs.length) {
+      this.currentTab = this.tabs.length - 1;
+    }
   }
 
   getTotal (row) {
-    const block = this.codeBlocks[this.tab];
-    const lines = block.text.split("\n");
+    const tab = this.tabs[this.currentTab];
+    const lines = tab.text.split("\n");
     return lines.slice(0, row).reduce((acc, x) => acc + x.length + 1, 0);
   }
 
   getRowCol () {
-    const block = this.codeBlocks[this.tab];
-    const index = block.index;
-    const before = block.text.substring(0, index);
+    const tab = this.tabs[this.currentTab];
+    const index = tab.index;
+    const before = tab.text.substring(0, index);
     const lines = before.split("\n");
     const row = lines.length - 1;
     const col = index - this.getTotal(row);
@@ -89,125 +114,82 @@ export class Editor {
   }
 
   setRowCol (row, col) {
-    const block = this.codeBlocks[this.tab];
-    const lines = block.text.split("\n");
+    const tab = this.tabs[this.currentTab];
+    const lines = tab.text.split("\n");
     col = Math.min(lines[row].length, col);
-    block.index = this.getTotal(row) + col;
-  }
-
-  getTabTitle (text, saved) {
-    text = text.trim();
-    let title = "";
-
-    const nextToken = (t, i, stop) => {
-      const index = text.indexOf(stop);
-      if (index === -1) {
-        return t.slice(i).trim();
-      }
-      else {
-        return t.slice(i, index).trim();
-      }
-    };
-
-    if (this.isTerminal(text)) {
-      title = "terminal";
-    }
-    else if (text.startsWith("//")) {
-      title = text.split("\n")[0].slice(2).trim();
-    }
-    else if (text.startsWith("function")) {
-      title = nextToken(text, 8, "(");
-    }
-    else if (text.startsWith("const")) {
-      title = nextToken(text, 5, "=");
-    }
-    else {
-      title = text.split("\n")[0];
-    }
-
-    title = (saved ? "" : "* ") + title;
-
-    if (title.length > 20) {
-      title = title.slice(0, 17) + "...";
-    }
-
-    return title;
+    tab.index = this.getTotal(row) + col;
   }
 
   updateClippingPlanes () {
     for (let color of Object.keys(colors)) {
-      const colorMesh = this.mesh.getObjectByName(color);
-      const [bottomPlane, topPlane] = colorMesh.material.clippingPlanes;
+      const colorMesh = this.object.getObjectByName(color);
+      const [bottomPlane, topPlane, rightPlane] = colorMesh.material.clippingPlanes;
       let position = new THREE.Vector3();
-      this.mesh.getWorldPosition(position);
-      const normal = new THREE.Vector3(0, 1, 0).applyEuler(this.mesh.rotation)
+      this.object.getWorldPosition(position);
+      let normal = new THREE.Vector3(0, 1, 0).applyEuler(this.object.rotation)
       bottomPlane.normal.copy(normal);
       bottomPlane.constant = -position.dot(bottomPlane.normal) + 0.48;
       topPlane.normal.copy(normal);
       topPlane.normal.multiplyScalar(-1);
       topPlane.constant = -position.dot(topPlane.normal) + 0.45;
+
+      normal.set(-1, 0, 0).applyEuler(this.object.rotation)
+      rightPlane.normal.copy(normal);
+      rightPlane.constant = -position.dot(rightPlane.normal) + 1.37;
     }
   }
 
   update () {
-    const block = this.codeBlocks[this.tab];
-    const text = block.text;
+    const tab = this.tabs[this.currentTab];
+    const text = tab.text;
     const result = highlight(text);
-    const getY = () => textOffset[1] + 0.1 - 0.39 * (row - block.offset);
+    const getY = () => textOffset[1] + 0.1 - 0.39 * (row - tab.offset);
     const [row, col] = this.getRowCol();
 
-    while (getY() > 2.1) block.offset -= 1;
-    while (getY() < -2.1) block.offset += 1;
+    while (getY() > 2.1) tab.offset -= 1;
+    while (getY() < -2.2) tab.offset += 1;
     this.cursor.position.set(textOffset[0] + 0.08 + 0.167 * col, getY(), 0.01);
 
     result.black = text;
     result.black = result.black.replace(/[\x20-\x7E]/gs, ' ');
-    if (block.index !== text.length) {
-      result.black = util.replaceChar(result.black,
-                                      block.index,
-                                      text[block.index]);
+    if (tab.index !== text.length) {
+      result.black = util.replaceChar(result.black, tab.index, text[tab.index]);
     }
 
     for (let color of Object.keys(result)) {
-      const colorMesh = this.mesh.getObjectByName(color);
+      const colorMesh = this.object.getObjectByName(color);
       colorMesh.geometry.dispose();
       let text = result[color];
-      if (util.isPrintable(text[block.index]) && color !== "black") {
-        text = util.replaceChar(text, block.index, ' ');
+      if (util.isPrintable(text[tab.index]) && color !== "black") {
+        text = util.replaceChar(text, tab.index, ' ');
       }
       const shapes = this.font.generateShapes(text, 1);
       colorMesh.geometry = new THREE.ShapeGeometry(shapes);
-      colorMesh.position.y= textOffset[1] + 0.39 * block.offset;
+      colorMesh.position.y= textOffset[1] + 0.39 * tab.offset;
     }
 
-    this.tabSelector.position.y = 2.06 - 0.35 * this.tab;
+    this.selector.position.y = 2.06 - 0.35 * this.currentTab;
 
-    for (let i = 0; i < this.tabTexts.length; i++) {
-      const tabText = this.tabTexts[i];
-      tabText.geometry.dispose();
-      let title = "";
-      if (i < this.codeBlocks.length) {
-        title = this.getTabTitle(this.codeBlocks[i].text, tabText.saved);
-      }
-      const shapes = this.font.generateShapes(title, 0.8);
-      tabText.geometry = new THREE.ShapeGeometry(shapes);
+    for (let [i, tab] of this.tabs.entries()) {
+      tab.update(i, this.font);
+      tab.canvas.object.visible = i === this.currentTab;
     }
   }
 
   insert (text) {
-    const block = this.codeBlocks[this.tab];
-    const [before, after] = util.splitText(block.text, block.index);
-    this.tabTexts[this.tab].saved = false;
-    block.text = before + text + after;
-    block.index += text.length;
+    const tab = this.tabs[this.currentTab];
+    const [before, after] = util.splitText(tab.text, tab.index);
+    this.tabs[this.currentTab].saved = false;
+    tab.text = before + text + after;
+    tab.index += text.length;
   }
 
   moveCursor (x, y) {
-    const block = this.codeBlocks[this.tab];
+    const tab = this.tabs[this.currentTab];
     if (x < 0) {
-      block.index = Math.max(0, block.index + x);
+      tab.index = Math.max(0, tab.index + x);
     } else if (x > 0) {
-      block.index = Math.min(block.index + x, block.text.length);
+      tab.index = Math.min(tab.index + x, tab.text.length);
     }
     else if (y < 0) {
       const [row, col] = this.getRowCol();
@@ -217,7 +199,7 @@ export class Editor {
     }
     else if (y > 0) {
       const [row, col] = this.getRowCol();
-      const lines = block.text.split("\n");
+      const lines = tab.text.split("\n");
       if (row < lines.length - 1) {
         this.setRowCol(row + 1, col);
       }
@@ -225,14 +207,14 @@ export class Editor {
   }
 
   erase (offset) {
-    const block = this.codeBlocks[this.tab];
-    const [before, after] = util.splitText(block.text, block.index);
-    this.tabTexts[this.tab].saved = false;
+    const tab = this.tabs[this.currentTab];
+    const [before, after] = util.splitText(tab.text, tab.index);
+    this.tabs[this.currentTab].saved = false;
     if (offset < 0) {
-      block.text = before.substring(0, before.length + offset) + after;
-      block.index = Math.max(0, block.index + offset);
+      tab.text = before.substring(0, before.length + offset) + after;
+      tab.index = Math.max(0, tab.index + offset);
     } else {
-      block.text = before + after.substring(offset);
+      tab.text = before + after.substring(offset);
     }
   }
 
@@ -253,7 +235,7 @@ export class Editor {
 
   parseCommand (code) {
     const trimmed = code.trim();
-    if (this.isTerminal(trimmed)) {
+    if (util.isTerminal(trimmed)) {
       const lines = trimmed.split("\n");
       const line = lines[lines.length - 1].slice(2);
       return `console.log((() => ${line}) ())`;
@@ -264,22 +246,23 @@ export class Editor {
 
   execute () {
     try {
-      const text = this.parseCommand(this.codeBlocks[this.tab].text);
+      const text = this.parseCommand(this.tabs[this.currentTab].text);
       const globals = this.getGlobals(text)
             .map(x => `window.${x} = ${x};`).join("\n");
 
       const code = `import * as THREE from 'three';
-                  import * as util from './util';
+                    import * as util from './util';
 
-                  export function run (scene) {
-                    try {
-                      ${text}
-                      ${globals}
-                    } catch (error) {
-                      console.log(error);
+                    export function run (scene) {
+                      try {
+                        ${text}
+                        ${globals}
+                      } catch (error) {
+                        console.log(error);
+                      }
                     }
-                  }
-                 // ${Date.now()}`;
+                    // ${Date.now()}`;
+
       fetch('/update-code', {
         method: 'POST',
         headers: {
@@ -293,45 +276,44 @@ export class Editor {
     }
   }
 
-  isTerminal (text) {
-    return text.split('\n').some(line => line.startsWith(">"));
-  }
-
   handleOutput (output) {
     if (output.length > 0) {
       console.log(output);
-      if (this.isTerminal(this.codeBlocks[this.tab].text)) {
-        this.codeBlocks[this.tab].text += '\n' + output + '> ';
-        this.codeBlocks[this.tab].index = this.codeBlocks[this.tab].text.length;
+      if (output.length > 68) {
+        output = output.slice(0, 65) + "...";
+      }
+      if (util.isTerminal(this.tabs[this.currentTab].text)) {
+        this.tabs[this.currentTab].text += '\n' + output + '> ';
+        this.tabs[this.currentTab].index = this.tabs[this.currentTab].text.length;
       }
       else {
-        let outTabIndex = this.codeBlocks.findIndex(block => {
-          return this.isTerminal(block.text);
+        let outTabIndex = this.tabs.findIndex(tab => {
+          return util.isTerminal(tab.text);
         });
 
         if (outTabIndex === -1) {
-          this.codeBlocks.push({text: "> ", index: 2, offset: 0});
-          outTabIndex = this.codeBlocks.length - 1;
+          this.newTab("> ", 2);
+          outTabIndex = this.tabs.length - 1;
         }
 
-        const block = this.codeBlocks[outTabIndex];
-        const index = block.text.lastIndexOf(">");
-        const [before, after] = util.splitText(block.text, index);
-        block.text = before + output + after;
-        block.index = block.text.length;
-        this.tabTexts[outTabIndex].saved = false;
+        const tab = this.tabs[outTabIndex];
+        const index = tab.text.lastIndexOf(">");
+        const [before, after] = util.splitText(tab.text, index);
+        tab.text = before + output + after;
+        tab.index = tab.text.length;
+        this.tabs[outTabIndex].saved = false;
       }
       this.update();
     }
   }
 
-  nextBlock () {
-    this.tab = (this.tab + 1) % this.codeBlocks.length;
+  nextTab () {
+    this.currentTab = (this.currentTab + 1) % this.tabs.length;
   }
 
-  previousBlock () {
-    const len = this.codeBlocks.length;
-    this.tab = (this.tab - 1 + len) % this.codeBlocks.length;
+  previousTab () {
+    const len = this.tabs.length;
+    this.currentTab = (this.currentTab - 1 + len) % this.tabs.length;
   }
 
   calculateIndentation (code) {
@@ -361,11 +343,11 @@ export class Editor {
   }
 
   newLine () {
-    const block = this.codeBlocks[this.tab];
-    const [before, after] = util.splitText(block.text, block.index);
+    const tab = this.tabs[this.currentTab];
+    const [before, after] = util.splitText(tab.text, tab.index);
     const indent = this.calculateIndentation(before);
-    block.text = before + "\n" + indent + after;
-    block.index += indent.length + 1;
+    tab.text = before + "\n" + indent + after;
+    tab.index += indent.length + 1;
   }
 
   prevWordIndex (text, index) {
@@ -398,79 +380,79 @@ export class Editor {
   }
 
   visited () {
-    const text = this.codeBlocks[this.tab].text;
-    if (this.isTerminal(text) && text.trim().endsWith(">")) {
-      this.tabTexts[this.tab].saved = true;
+    const text = this.tabs[this.currentTab].text;
+    if (util.isTerminal(text) && text.trim().endsWith(">")) {
+      this.tabs[this.currentTab].saved = true;
       this.update();
     }
   }
 
   onKeyDown (event) {
-    const block = this.codeBlocks[this.tab];
+    const tab = this.tabs[this.currentTab];
 
     if (event.altKey && event.shiftKey) {
       if (event.key === "<") {
-        block.index = 0;
+        tab.index = 0;
       }
       else if (event.key === ">") {
-        block.index = block.text.length;
+        tab.index = tab.text.length;
       }
     }
     else if (event.ctrlKey && event.shiftKey) {
       if (event.key === "J") {
         this.execute();
-        this.tabTexts[this.tab].saved = true;
+        this.tabs[this.currentTab].saved = true;
       }
       else if (event.key === "P") {
         this.insert("console.log();");
         this.moveCursor(-2, 0);
        }
       else if (event.key === "Tab") {
-        this.previousBlock();
+        this.previousTab();
         this.visited();
       }
     }
     else if (event.altKey) {
       if (event.key === "f") {
-        block.index = this.nextWordIndex(block.text, block.index);
+        tab.index = this.nextWordIndex(tab.text, tab.index);
       }
       else if (event.key === "b") {
-        block.index = this.prevWordIndex(block.text, block.index);
+        tab.index = this.prevWordIndex(tab.text, tab.index);
       }
       else if (event.key === "d") {
-        const index = this.nextWordIndex(block.text, block.index);
-        this.erase(index - block.index);
+        const index = this.nextWordIndex(tab.text, tab.index);
+        this.erase(index - tab.index);
       }
       else if (event.key === "Backspace") {
-        const index = this.prevWordIndex(block.text, block.index);
-        this.erase(index - block.index);
+        const index = this.prevWordIndex(tab.text, tab.index);
+        this.erase(index - tab.index);
       }
     }
     else if (event.ctrlKey) {
       if (event.key.match(/^[0-9]$/)) {
         const index = parseInt(event.key);
-        if (index < this.codeBlocks.length) {
-          this.tab = index;
+        if (index < this.tabs.length) {
+          this.currentTab = index;
         }
         this.visited();
       }
       else if (event.key === "Tab") {
-        this.nextBlock();
+        this.nextTab();
         this.visited();
       }
       else if (event.key === "t") {
-        this.codeBlocks.push({text: "", index: 0, offset: 0});
-        this.tab = this.codeBlocks.length - 1;
+        this.newTab("", 0)
+        this.currentTab = this.tabs.length - 1;
       }
       else if (event.key === "j") {
         this.newLine();
       }
       else if (event.key === "k") {
-        let index = block.text.indexOf("\n", block.index);
+        let index = tab.text.indexOf("\n", tab.index);
         if (index === -1) {
-          index = block.text.length;
+          index = tab.text.length;
         }
-        let l = block.text.substring(block.index, index).length;
+        let l = tab.text.substring(tab.index, index).length;
         if (l === 0) l = 1;
         this.erase(l);
       }
@@ -490,14 +472,17 @@ export class Editor {
         this.moveCursor(0, -1);
       }
       else if (event.key === "e") {
-        block.index = block.text.indexOf("\n", block.index);
-        if (block.index === -1) block.index = block.text.length;
+        tab.index = tab.text.indexOf("\n", tab.index);
+        if (tab.index === -1) tab.index = tab.text.length;
       }
       else if (event.key === "a") {
-        block.index = block.text.lastIndexOf("\n", block.index - 1) + 1;
+        tab.index = tab.text.lastIndexOf("\n", tab.index - 1) + 1;
       }
       else if (event.key === "c") {
-        const code = block.text.substring(0, block.index);
+        this.cursor.material.color.setHex(0);
+        this.frozen = true;
+
+        const code = tab.text.substring(0, tab.index);
         fetch('/complete-code', {
           method: 'POST',
           headers: {
@@ -506,28 +491,61 @@ export class Editor {
           body: code
         }).then(response => response.json())
           .then(data => {
-            this.insert(data.completions[0].displayText);
-            this.update();
+            if (data.completions.length > 0) {
+              this.insert(data.completions[0].displayText);
+              this.update();
+            }
+            this.cursor.material.color.setHex(0xffffff);
+            this.frozen = false;
           });
       }
       else if (event.key === "l") {
-        if (this.isTerminal(block.text)) {
-          block.text = "> ";
-          block.index = 2;
+        if (util.isTerminal(tab.text)) {
+          tab.text = "> ";
+          tab.index = 2;
         }
         else {
-          block.text = "";
-          block.index = 0;
+          tab.text = "";
+          tab.index = 0;
         }
+
+        tab.clearCanvas();
       }
       else if (event.key === "w") {
-        this.codeBlocks.splice(this.tab, 1);
-        if (this.codeBlocks.length === 0) {
-          this.codeBlocks.push({text: "", index: 0, offset: 0});
-        }
-        if (this.tab >= this.codeBlocks.length) {
-          this.tab = this.codeBlocks.length - 1;
-        }
+        this.deleteTab(this.currentTab);
+      }
+      else if (event.key === "o") {
+        fetch('/open', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'text/plain',
+          },
+        }).then(response => response.json())
+          .then(data => {
+            const numTabs = this.tabs.length;
+            for (let i = 0; i < numTabs; i++) {
+              this.deleteTab(0);
+            }
+            this.tabs = [];
+
+            for (let tab of data.tabs) {
+              this.newTab(tab.text, tab.index);
+            }
+
+            this.update();
+          });
+      }
+      else if (event.key === "s") {
+        const keys = ["text", "index", "offset", "saved"];
+        const tabs = this.tabs.map(tab => util.selectKeys(tab, keys))
+
+        fetch('/save', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'text/plain',
+          },
+          body: JSON.stringify({tabs})
+        });
       }
     }
     else if (event.key === "Backspace") {
@@ -537,9 +555,9 @@ export class Editor {
       this.erase(1);
     }
     else if (event.key === "Enter") {
-      if (this.isTerminal(block.text)) {
+      if (util.isTerminal(tab.text)) {
         this.execute();
-        this.tabTexts[this.tab].saved = true;
+        this.tabs[this.currentTab].saved = true;
       }
       else {
         this.newLine();
@@ -558,7 +576,7 @@ export class Editor {
       this.moveCursor(0, 1);
     }
     else if (event.key === "}") {
-      const text = block.text.substring(0, block.index);
+      const text = tab.text.substring(0, tab.index);
       const indent = this.calculateIndentation(text);
       const indent2 = this.calculateIndentation(text + "}");
       const start = text.lastIndexOf("\n");
@@ -576,5 +594,30 @@ export class Editor {
       this.insert(event.key);
     }
     this.update();
+  }
+
+  onPointerDown(event) {
+    this.tabs[this.currentTab].onPointerDown(event);
+  }
+
+  onPointerMove(event) {
+    this.pointer.visible = true;
+
+    if (this.pointerTimeout) {
+      clearTimeout(this.pointerTimeout);
+    }
+    this.pointerTimeout = setTimeout(() => {
+      this.pointer.visible = false;
+    }, 1000);
+
+    this.tabs[this.currentTab].onPointerMove(event);
+  }
+
+  onPointerUp(event) {
+    this.tabs[this.currentTab].onPointerUp(event);
+  }
+
+  onResize(event) {
+    this.tabs[this.currentTab].onResize(event);
   }
 }

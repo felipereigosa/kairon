@@ -6,4 +6,8 @@ Kairon is a VR code editor. The idea is you never have to take the headset off b
 
 # How to run
 
+
+# copilot
+explanation about hack
+how to install on emacs *link to project* test it's running
 ...

@@ -16,7 +16,7 @@ export function createRoundedPlane (width, height, radius) {
   shape.quadraticCurveTo(left, top, left, top + radius);
 
   const geometry = new THREE.ExtrudeGeometry(shape, {
-    depth: 0.0001,
+    depth: 0.001,
     bevelEnabled: false
   });
 
@@ -44,7 +44,7 @@ export function splitText (text, index) {
   return [before, after];
 }
 
-export const toRad = THREE.MathUtils.degToRad;
+export const toRadians = THREE.MathUtils.degToRad;
 
 export function within (value, min, max) {
   if (value < min) {
@@ -130,4 +130,21 @@ export function clone(source) {
 
 export function print (...args) {
   console.log(args.join(" "));
+}
+
+export function mapRange (value, min1, max1, min2, max2) {
+  return min2 + (max2 - min2) * (value - min1) / (max1 - min1);
+}
+
+export function isTerminal (text) {
+  return text.split('\n').some(line => line.startsWith(">"));
+}
+
+export function selectKeys (obj, keys) {
+  return keys.reduce((newObj, key) => {
+    if (key in obj) {
+      newObj[key] = obj[key];
+    }
+    return newObj;
+  }, {});
 }

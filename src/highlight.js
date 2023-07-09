@@ -16,6 +16,7 @@ const colorMap = {"hljs-keyword": "blue",
                   "hljs-variable constant_": "red",
                   "hljs-subst": "red",
                   "hljs-attr": "teal",
+                  "hljs-function": "white",
                  };
 
 function useColors (code) {

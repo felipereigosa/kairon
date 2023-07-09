@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { FontLoader } from 'three/addons/loaders/FontLoader.js';
+import { FontLoader } from 'three/addons/loaders/FontLoader';
 import * as esprima from 'esprima';
 import { highlight } from './highlight';
 import * as util from './util';
@@ -252,6 +252,8 @@ export class Editor {
 
       const code = `import * as THREE from 'three';
                     import * as util from './util';
+                    import { Button } from './presets/button';
+                    import { Slider } from './presets/slider';
 
                     export function run (scene) {
                       try {

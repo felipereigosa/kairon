@@ -1,19 +1,17 @@
 import * as THREE from 'three';
 import * as CANNON from 'cannon-es';
-import { BoxLineGeometry } from 'three/addons/geometries/BoxLineGeometry.js';
-import { VRButton } from 'three/addons/webxr/VRButton.js';
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
-import { VelocityEstimator } from "./velocity.js";
-import * as util from './util.js';
+import { BoxLineGeometry } from 'three/addons/geometries/BoxLineGeometry';
+import { VRButton } from 'three/addons/webxr/VRButton';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader';
+import { VelocityEstimator } from "./velocity";
+import * as util from './util';
 import { run } from './code';
 import { Editor } from './editor';
 
 let camera;
-let scene;
 let renderer;
 let physics;
 let entered;
-let avatar;
 let editor;
 let timeSinceUpdate = 0;
 
@@ -143,7 +141,6 @@ function createEnvironment () {
     'offset': {value: 500},
     'exponent': {value: 0.6}
   };
-  scene.fog.color.copy(uniforms['bottomColor'].value);
 
   const skyGeo = new THREE.SphereGeometry(4000, 32, 15);
   const skyMat = new THREE.ShaderMaterial({
@@ -172,10 +169,9 @@ function constrainAvatar () {
 function init () {
   try {
     entered = false;
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color().setHSL( 0.6, 0, 1 );
-    scene.fog = new THREE.Fog( scene.background, 1, 5000 );
-    avatar = new THREE.Group();
+    window.scene = new THREE.Scene();
+    scene.background = new THREE.Color().setHSL(0.6, 0, 1);
+    window.avatar = new THREE.Group();
     avatar.clock = new THREE.Clock();
     const width = window.innerWidth;
     const height = window.innerHeight;
@@ -240,7 +236,7 @@ function init () {
                 });
 
     editor = new Editor();
-    editor.object.position.set(0, 1, 0);
+    editor.object.position.set(0, 1, -1);
     editor.object.scale.set(0.2, 0.2, 0.2);
     scene.add(editor.object);
 
@@ -267,7 +263,7 @@ function move () {
     direction.multiplyScalar(avatar.speed);
     avatar.position.add(direction);
   }
-  avatar.position.y += -getAxes("right")[1] * 0.015;
+  avatar.position.y += -getAxes("right")[1] * avatar.speed;
   constrainAvatar();
 }
 
@@ -302,7 +298,12 @@ function getObjectAt (position) {
   scene.traverse((object) => {
     if (object instanceof THREE.Mesh && object.interactable) {
       if (isInsideObject(object, position)) {
-        result = object;
+        if (object.name === "collision") {
+          result = object.parent;
+        }
+        else {
+          result = object;
+        }
         return;
       }
     }
@@ -325,23 +326,29 @@ function buttonPressed (hand, button) {
 
     if (object) {
       controller.held = object;
-      if (object === otherController.held) {
-        otherController.held = null;
+
+      if (object.grabbed) {
+        object.grabbed(hand);
       }
-      controller.add(object);
+      else  {
+        if (object === otherController.held) {
+          otherController.held = null;
+        }
+        controller.add(object);
 
-      const relativeTransform =
-            new THREE.Matrix4()
-            .copy(controller.matrixWorld)
-            .invert()
-            .multiply(object.matrixWorld);
+        const relativeTransform =
+              new THREE.Matrix4()
+              .copy(controller.matrixWorld)
+              .invert()
+              .multiply(object.matrixWorld);
 
-      relativeTransform.decompose(object.position,
-                                  object.quaternion,
-                                  object.scale);
-      pulse(hand, 1, 50);
-      if (object.body) {
-        object.body.wakeUp();
+        relativeTransform.decompose(object.position,
+                                    object.quaternion,
+                                    object.scale);
+        pulse(hand, 1, 50);
+        if (object.body) {
+          object.body.wakeUp();
+        }
       }
     }
   }
@@ -359,25 +366,31 @@ function buttonReleased (hand, button) {
     playAction(handMesh, "open", 3);
 
     const held = controller.held;
-    if (held) {
-      const position = new THREE.Vector3();
-      const quaternion = new THREE.Quaternion();
-      held.getWorldPosition(position);
-      held.getWorldQuaternion(quaternion);
-      scene.add(held);
-      held.position.copy(position);
-      held.quaternion.copy(quaternion);
 
-      if (held.body) {
-        held.body.position.copy(held.position);
-        held.body.quaternion.copy(held.quaternion);
-        velocity.set(...controller.velocityEstimator.getVelocity());
-        velocity.multiplyScalar(120);
-        held.body.velocity.set(velocity.x, velocity.y, velocity.z);
-        held.body.angularVelocity.set(0, 0, 0);
-        held.body.wakeUp();
+    if (held) {
+      if (held.released) {
+        held.released(hand);
       }
-      controller.held = null;
+      else {
+        const position = new THREE.Vector3();
+        const quaternion = new THREE.Quaternion();
+        held.getWorldPosition(position);
+        held.getWorldQuaternion(quaternion);
+        scene.add(held);
+        held.position.copy(position);
+        held.quaternion.copy(quaternion);
+
+        if (held.body) {
+          held.body.position.copy(held.position);
+          held.body.quaternion.copy(held.quaternion);
+          velocity.set(...controller.velocityEstimator.getVelocity());
+          velocity.multiplyScalar(120);
+          held.body.velocity.set(velocity.x, velocity.y, velocity.z);
+          held.body.angularVelocity.set(0, 0, 0);
+          held.body.wakeUp();
+        }
+        controller.held = null;
+      }
     }
   }
   else if (button === "x" ) {
@@ -400,6 +413,12 @@ function render () {
         pollControllers();
         move();
         turn();
+
+        scene.traverse((child) => {
+          if (child.update) {
+            child.update();
+          }
+        });
 
         const rightHand = scene.getObjectByName("right_hand");
         rightHand.mixer.update(delta);

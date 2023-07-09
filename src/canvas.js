@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import * as util from './util.js';
+import * as util from './util';
 
 export class Canvas {
   constructor () {

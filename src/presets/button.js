@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import * as util from '../util';
 
 export class Button extends THREE.Group {
   constructor() {
@@ -18,7 +19,7 @@ export class Button extends THREE.Group {
       });
 
       const collision = this.getObjectByName("collision");
-      collision.interactable = true;
+      collision.interactive = true;
       collision.visible = false;
 
       this.cap = this.getObjectByName('cap');
@@ -53,7 +54,7 @@ export class Button extends THREE.Group {
 
     if (newY === bottom && !this.pressed) {
       if (this.onpress) {
-        this.onpress();
+        editor.handleOutput(util.getOutput(this.onpress));
       }
       this.pressed = true;
     }

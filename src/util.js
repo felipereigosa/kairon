@@ -80,10 +80,22 @@ export function signedAngle(v1, v2, axis) {
 export function getOutput(func) {
   let logOutput = '';
   const originalLog = console.log;
+  const seen = new WeakSet();
+
+  const replacer = (key, value) => {
+    if (typeof value === 'object' && value !== null) {
+      if (seen.has(value)) {
+        return;
+      }
+      seen.add(value);
+    }
+    return value;
+  };
+
   console.log = function(message) {
     if (Array.isArray(message) ||
         (typeof message === 'object' && message !== null)) {
-      logOutput += JSON.stringify(message) + '\n';
+      logOutput += JSON.stringify(message, replacer) + '\n';
     } else {
       logOutput += message + '\n';
     }

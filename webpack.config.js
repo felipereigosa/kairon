@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const codePath = path.resolve(__dirname, 'src/code.js');
 const savePath = path.resolve(__dirname, 'state.js');
+const logPath = path.resolve(__dirname, 'log.js');
 const CopyPlugin = require('copy-webpack-plugin');
 const { exec } = require('child_process');
 
@@ -18,6 +19,13 @@ module.exports = {
           body += chunk.toString();
         });
         req.on('end', () => {
+          const lines = body.split('\n');
+          fs.appendFile(logPath, lines.slice(8, lines.length - 6).join('\n'),
+                        err => {
+                          if (err) {
+                            console.error(err);
+                          }
+                        });
           fs.writeFile(codePath, body, err => {
             if (err) {
               console.error(err);
@@ -35,11 +43,13 @@ module.exports = {
           code += chunk.toString();
         });
         req.on('end', () => {
-          exec(`emacsclient -e '(complete "${code}")'`,
-               (error, stdout, stderr) => {
-                 const data = JSON.parse(JSON.parse(stdout));
-                 res.json(data);
-               });
+          fs.writeFile("/tmp/code.txt", code, (err) => {
+            exec(`emacs --batch --eval '(load-file "copilot.el")' --eval '(complete)'`,
+                 (error, stdout, stderr) => {
+                   const data = JSON.parse(stdout);
+                   res.json(data);
+                 });
+          });
         });
       });
 

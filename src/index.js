@@ -8,11 +8,8 @@ import * as util from './util';
 import { run } from './code';
 import { Editor } from './editor';
 
-let camera;
 let renderer;
-let physics;
 let entered;
-let editor;
 let timeSinceUpdate = 0;
 
 const buttonNames = ["trigger", "grab", "", "thumbstick", "x", "y", ""];
@@ -175,15 +172,15 @@ function init () {
     avatar.clock = new THREE.Clock();
     const width = window.innerWidth;
     const height = window.innerHeight;
-    camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 5000);
-    camera.position.set(0, 1, 2.2);
+    window.camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 5000);
+    camera.position.set(0.3, 1, 0.3);
 
     avatar.add(camera);
     avatar.controllers = {};
     avatar.speed = 0.015;
     scene.add(avatar);
 
-    physics = new CANNON.World();
+    window.physics = new CANNON.World();
     physics.gravity.set(0, -9.82, 0);
     physics.allowSleep = true;
 
@@ -235,10 +232,10 @@ function init () {
                   renderer.setAnimationLoop(render);
                 });
 
-    editor = new Editor();
-    editor.object.position.set(0, 1, -1);
+    window.editor = new Editor();
     editor.object.scale.set(0.2, 0.2, 0.2);
     scene.add(editor.object);
+    editor.show();
 
     scene.traverse(function (child) {
       child.background = true;
@@ -296,7 +293,7 @@ function isInsideObject (object, position) {
 function getObjectAt (position) {
   let result = null;
   scene.traverse((object) => {
-    if (object instanceof THREE.Mesh && object.interactable) {
+    if (object instanceof THREE.Mesh && object.interactive) {
       if (isInsideObject(object, position)) {
         if (object.name === "collision") {
           result = object.parent;
@@ -325,6 +322,7 @@ function buttonPressed (hand, button) {
     const object = getObjectAt(position);
 
     if (object) {
+      window.last_held = object;
       controller.held = object;
 
       if (object.grabbed) {
@@ -396,6 +394,9 @@ function buttonReleased (hand, button) {
   else if (button === "x" ) {
     avatar.speed = 0.015;
   }
+  else if (button === "y") {
+    editor.toggleVisibility();
+  }
 }
 
 const position = new THREE.Vector3();
@@ -429,7 +430,6 @@ function render () {
         const right = avatar.controllers.right;
         scene.traverse((object) => {
           if (object instanceof THREE.Mesh &&
-              object.interactable &&
               object.body) {
             if (object.parent === left || object.parent === right) {
               object.getWorldPosition(position);
@@ -480,5 +480,5 @@ source.onerror = function(error) {
 };
 
 module.hot.accept('./code', function () {
-  editor.handleOutput(util.getOutput(() => run(scene)));
+  editor.handleOutput(util.getOutput(run));
 });

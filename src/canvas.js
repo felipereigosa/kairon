@@ -30,7 +30,7 @@ export class Canvas {
       this.context.lineWidth = 60;
     } else {
       this.context.globalCompositeOperation = 'source-over';
-      this.context.strokeStyle = 'red';
+      this.context.strokeStyle = 'white';
       this.context.lineWidth = 4 * event.pressure;
     }
 

@@ -7,7 +7,7 @@
   (setq connection
         (make-instance 'jsonrpc-process-connection
                        :process (make-process :name "my agent"
-                                              :command (list "node" "/home/felipe/.emacs.d/copilot.el/dist/agent.js")
+                                              :command (list "node" "./dist/agent.js")
                                               :coding 'utf-8-emacs-unix
                                               :connection-type 'pipe
                                               :noquery t
@@ -17,7 +17,7 @@
 
 (defun sync-doc (code)
   (jsonrpc-notify connection ':textDocument/didOpen
-                   (list :textDocument (list :uri "file:///home/felipe/Desktop/temp.js"
+                   (list :textDocument (list :uri "./src/index.js"
                                              :languageId "javascript"
                                              :version 0
                                              :text code))))
@@ -26,11 +26,11 @@
         :tabSize 4
         :indentSize 4
         :insertSpaces t
-        :path "/home/felipe/Desktop/temp.js"
-        :uri "file:///home/felipe/Desktop/temp.js"
-        :relativePath "temp.js"
+        :path "./src/index.js"
+        :uri "./src/index.js"
+        :relativePath "src/index.js"
         :languageId "javascript"
-        :position (list :line 4 :character 0)))
+        :position (list :line 100 :character 0)))
 
 (defun plist-to-alist (plist)
   (let ((alist '()))
@@ -41,16 +41,19 @@
       (setq plist (cddr plist)))
     alist))
 
-(defun complete (code)
-  (interactive "s")
+(defun complete ()
+  (interactive)
 
-  (if (not connection)
-      (start-agent))
+  (let ((code (with-temp-buffer
+                (insert-file-contents "/tmp/code.txt")
+                (buffer-string))))
+    (if (not connection)
+        (start-agent))
 
-  (sync-doc code)
+    (sync-doc code)
 
-  (let* ((completions (jsonrpc-request connection
-        		               'getCompletions (list :doc (generate-doc))))
-         (alist (plist-to-alist completions))
-         (json (json-encode-alist alist)))
-    (princ (format "%s\n" json))))
+    (let* ((completions (jsonrpc-request connection
+                                         'getCompletions (list :doc (generate-doc))))
+           (alist (plist-to-alist completions))
+           (json (json-encode-alist alist)))
+      (princ (format "%s\n" json)))))

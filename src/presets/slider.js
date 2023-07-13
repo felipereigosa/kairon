@@ -19,12 +19,12 @@ export class Slider extends THREE.Group {
       });
 
       const collision = this.getObjectByName("collision");
-      collision.interactable = true;
+      collision.interactive = true;
       collision.visible = false;
 
       this.knob = this.getObjectByName('knob');
       this.amount = this.getObjectByName('amount');
-      this.knob.interactable = true;
+      this.knob.interactive = true;
 
       this.knob.grabbed = (hand) => {
         this.changing = hand;
@@ -51,7 +51,7 @@ export class Slider extends THREE.Group {
       this.amount.scale.set(value * 2, 1, 1);
 
       if (this.onchange) {
-        this.onchange(value);
+        editor.handleOutput(util.getOutput(() => this.onchange(value)));
       }
     }
   }

@@ -33,7 +33,7 @@ export class Editor {
     this.pointer = new THREE.Group();
     this.pointer.position.z = 0.03;
     const dot = new THREE.Mesh(new THREE.CircleGeometry(0.05, 32),
-                               new THREE.MeshBasicMaterial({color: 'red'}));
+                               new THREE.MeshBasicMaterial({color: 'white'}));
     const square = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.15),
                                   new THREE.MeshBasicMaterial({color: 'white'}));
     const halo = new THREE.Mesh(new THREE.CircleGeometry(0.2, 32),
@@ -72,6 +72,7 @@ export class Editor {
       this.tabs = [];
       this.newTab("", 0);
 
+      this.loadedFont = true;
       this.updateClippingPlanes();
       this.update();
     });
@@ -121,21 +122,23 @@ export class Editor {
   }
 
   updateClippingPlanes () {
-    for (let color of Object.keys(colors)) {
-      const colorMesh = this.object.getObjectByName(color);
-      const [bottomPlane, topPlane, rightPlane] = colorMesh.material.clippingPlanes;
-      let position = new THREE.Vector3();
-      this.object.getWorldPosition(position);
-      let normal = new THREE.Vector3(0, 1, 0).applyEuler(this.object.rotation)
-      bottomPlane.normal.copy(normal);
-      bottomPlane.constant = -position.dot(bottomPlane.normal) + 0.48;
-      topPlane.normal.copy(normal);
-      topPlane.normal.multiplyScalar(-1);
-      topPlane.constant = -position.dot(topPlane.normal) + 0.45;
+    if (this.loadedFont) {
+      for (let color of Object.keys(colors)) {
+        const colorMesh = this.object.getObjectByName(color);
+        const [bottomPlane, topPlane, rightPlane] = colorMesh.material.clippingPlanes;
+        let position = new THREE.Vector3();
+        this.object.getWorldPosition(position);
+        let normal = new THREE.Vector3(0, 1, 0).applyEuler(this.object.rotation)
+        bottomPlane.normal.copy(normal);
+        bottomPlane.constant = -position.dot(bottomPlane.normal) + 0.48;
+        topPlane.normal.copy(normal);
+        topPlane.normal.multiplyScalar(-1);
+        topPlane.constant = -position.dot(topPlane.normal) + 0.45;
 
-      normal.set(-1, 0, 0).applyEuler(this.object.rotation)
-      rightPlane.normal.copy(normal);
-      rightPlane.constant = -position.dot(rightPlane.normal) + 1.37;
+        normal.set(-1, 0, 0).applyEuler(this.object.rotation)
+        rightPlane.normal.copy(normal);
+        rightPlane.constant = -position.dot(rightPlane.normal) + 1.37;
+      }
     }
   }
 
@@ -251,16 +254,17 @@ export class Editor {
             .map(x => `window.${x} = ${x};`).join("\n");
 
       const code = `import * as THREE from 'three';
+                    import * as CANNON from 'cannon-es';
                     import * as util from './util';
                     import { Button } from './presets/button';
                     import { Slider } from './presets/slider';
 
-                    export function run (scene) {
+                    export function run () {
                       try {
                         ${text}
                         ${globals}
                       } catch (error) {
-                        console.log(error);
+                        console.log("ERROR: " + error);
                       }
                     }
                     // ${Date.now()}`;
@@ -301,6 +305,10 @@ export class Editor {
         const tab = this.tabs[outTabIndex];
         const index = tab.text.lastIndexOf(">");
         const [before, after] = util.splitText(tab.text, index);
+
+        if (output[output.length - 1] !== "\n") {
+          output += "\n";
+        }
         tab.text = before + output + after;
         tab.index = tab.text.length;
         this.tabs[outTabIndex].saved = false;
@@ -507,8 +515,13 @@ export class Editor {
           tab.index = 2;
         }
         else {
-          tab.text = "";
-          tab.index = 0;
+          const [row, col] = this.getRowCol();
+          if (tab.offset === row) {
+            tab.offset = tab.offset - 12;
+          }
+          else {
+            tab.offset = row;
+          }
         }
 
         tab.clearCanvas();
@@ -548,6 +561,9 @@ export class Editor {
           },
           body: JSON.stringify({tabs})
         });
+      }
+      else if (event.key === "h") {
+        this.toggleVisibility();
       }
     }
     else if (event.key === "Backspace") {
@@ -621,5 +637,38 @@ export class Editor {
 
   onResize(event) {
     this.tabs[this.currentTab].onResize(event);
+  }
+
+  hide () {
+    this.object.visible = false;
+  }
+
+  show () {
+    this.object.position.copy(avatar.position);
+    const direction = new THREE.Vector3(0, 0, -1);
+    direction.applyEuler(camera.rotation);
+    direction.applyEuler(avatar.rotation);
+    direction.y = 0;
+    direction.normalize().multiplyScalar(2);
+    this.object.position.add(direction);
+    this.object.position.y += 1.2;
+    const eye = new THREE.Vector3().copy(avatar.position);
+    eye.y += 1.2;
+    this.object.lookAt(eye);
+    const quarterTurn = new THREE.Euler(0, util.toRadians(90), 0);
+    direction.applyEuler(quarterTurn);
+    direction.normalize().multiplyScalar(-0.4);
+    this.object.position.add(direction);
+    this.object.visible = true;
+    this.updateClippingPlanes();
+  }
+
+  toggleVisibility () {
+    if (this.object.visible) {
+      this.hide()
+    }
+    else {
+      this.show()
+    }
   }
 }

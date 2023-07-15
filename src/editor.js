@@ -52,7 +52,6 @@ export class Editor {
 
     const fontLoader = new FontLoader();
     fontLoader.load('/droid_sans_mono_regular.typeface.json', (font) => {
-      this.font = font;
       const shapes = font.generateShapes("", 1);
       const geometry = new THREE.ShapeGeometry(shapes);
       const material = new THREE.MeshBasicMaterial();
@@ -71,8 +70,8 @@ export class Editor {
 
       this.tabs = [];
       this.newTab("", 0);
+      this.font = font;
 
-      this.loadedFont = true;
       this.updateClippingPlanes();
       this.update();
     });
@@ -122,7 +121,7 @@ export class Editor {
   }
 
   updateClippingPlanes () {
-    if (this.loadedFont) {
+    if (this.font) {
       for (let color of Object.keys(colors)) {
         const colorMesh = this.object.getObjectByName(color);
         const [bottomPlane, topPlane, rightPlane] = colorMesh.material.clippingPlanes;

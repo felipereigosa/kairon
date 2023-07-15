@@ -222,6 +222,12 @@ function init () {
                   rightHand.mixer = new THREE.AnimationMixer(gltf.scene);
                   rightHand.scale.set(0.95, 0.95, 0.95);
 
+                  rightHand.traverse(function (child) {
+                    if (child.isMesh) {
+                      child.castShadow = true;
+                    }
+                  });
+
                   const leftHand = util.clone(rightHand);
                   leftHand.name = 'left_hand';
                   leftHand.scale.set(-0.95, 0.95, 0.95);

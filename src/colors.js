@@ -11,4 +11,4 @@ export const colors =
    "purple": 0x710096,
    "teal": 0x008080,
    "black": 0x000000,
-  };
+  }

@@ -70,14 +70,14 @@ If you want to contribute to this repo with your own idea, create an issue with 
 - fast/emacs independent copilot with javascript json-rpc
 - mark regions
 - copy and paste
-- proper save/open mechanism (right now you can only save the whole state with Ctrl + S and load it again with Ctrl + o)
+- proper save/open mechanism (right now you can only save the whole state with Ctrl + s and load it again with Ctrl + o)
 - send all the code to copilot as context for better completions (right now only the contents of the current tab is sent)
 - angular velocity estimator (like the existing velocity estimator, right now throwing things looks weird)
 - don't use editor.object canvas.object etc. make them inherit from THREE.Group like slider/button
 - use hand input (poses) in addition to controllers (enable with key and disable when I start typing?)
 - more presets, 3d versions of other 2d GUI elements
 - collaboration perhaps with networked aframe
-- merge the server and the input window? (I think it will mess shortcuts though) Is an online version so users can only visit a site and maybe enter a code on the browser?
+- merge the server and the input window? (I think it will mess shortcuts though) Is an online version so users can only visit a site and maybe enter a code on the browser doable?
 - fix constant headset crashing when I change code (besides code.js)
 - reorganize tabs (with shortcuts or mouse)
 - look and "click" with shortcut (s for select?)

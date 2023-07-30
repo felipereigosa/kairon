@@ -8,27 +8,29 @@ import { Tab } from './tab'
 
 const textOffset = [-4.5, 2]
 
-export class Editor {
+export class Editor extends THREE.Group {
   constructor () {
-    this.object = util.createRoundedPlane(14, 5, 0.2)
-    this.object.renderOrder = 0
+    super()
+    this.plane = util.createRoundedPlane(14, 5, 0.2)
+    this.plane.renderOrder = 0
     this.currentTab = 0
+    this.add(this.plane)
 
     this.cursor = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.3),
                                  new THREE.MeshBasicMaterial({color: 0xffffff}))
     this.cursor.position.set(textOffset[0] + 0.08, textOffset[1] + 0.1, 0.01)
-    this.object.add(this.cursor)
+    this.add(this.cursor)
 
     this.selector = new THREE.Mesh(new THREE.PlaneGeometry(2.1, 0.3),
                                    new THREE.MeshBasicMaterial({color: 0x101010}))
     this.selector.position.set(textOffset[0] - 1.4, 2.06 - 0.35, 0.01)
-    this.object.add(this.selector)
+    this.add(this.selector)
 
     const divider = new THREE.Mesh(new THREE.PlaneGeometry(1, 1),
                                    new THREE.MeshBasicMaterial({color: 0xaaaaaa}))
     divider.position.set(textOffset[0] - 0.3, 0, 0.01)
     divider.scale.set(0.01, 4.5, 1)
-    this.object.add(divider)
+    this.add(divider)
 
     this.pointer = new THREE.Group()
     this.pointer.position.z = 0.03
@@ -46,12 +48,12 @@ export class Editor {
     this.pointer.add(square)
     square.visible = false
     this.pointer.add(dot)
-    this.object.add(this.pointer)
+    this.add(this.pointer)
 
     this.pointer.visible = false
 
     const fontLoader = new FontLoader()
-    fontLoader.load('/droid_sans_mono_regular.typeface.json', (font) => {
+    fontLoader.load('droid_sans_mono_regular.typeface.json', (font) => {
       const shapes = font.generateShapes("", 1)
       const geometry = new THREE.ShapeGeometry(shapes)
       const material = new THREE.MeshBasicMaterial()
@@ -65,7 +67,7 @@ export class Editor {
         mesh.name = color
         mesh.material = template.material.clone()
         mesh.material.color.set(colors[color])
-        this.object.add(mesh)
+        this.add(mesh)
       }
 
       this.tabs = []
@@ -82,12 +84,12 @@ export class Editor {
     tab.text = text
     tab.index = index
     tab.canvas.pointer = this.pointer
-    this.object.add(tab.object)
+    this.add(tab)
     this.tabs.push(tab)
   }
 
   deleteTab (i) {
-    this.object.remove(this.tabs[i].object)
+    this.remove(this.tabs[i])
     this.tabs.splice(i, 1)
     if (this.tabs.length === 0) {
       this.newTab("", 0)
@@ -123,18 +125,18 @@ export class Editor {
   updateClippingPlanes () {
     if (this.font) {
       for (let color of Object.keys(colors)) {
-        const colorMesh = this.object.getObjectByName(color)
+        const colorMesh = this.getObjectByName(color)
         const [bottomPlane, topPlane, rightPlane] = colorMesh.material.clippingPlanes
         let position = new THREE.Vector3()
-        this.object.getWorldPosition(position)
-        let normal = new THREE.Vector3(0, 1, 0).applyEuler(this.object.rotation)
+        this.getWorldPosition(position)
+        let normal = new THREE.Vector3(0, 1, 0).applyEuler(this.rotation)
         bottomPlane.normal.copy(normal)
         bottomPlane.constant = -position.dot(bottomPlane.normal) + 0.48
         topPlane.normal.copy(normal)
         topPlane.normal.multiplyScalar(-1)
         topPlane.constant = -position.dot(topPlane.normal) + 0.45
 
-        normal.set(-1, 0, 0).applyEuler(this.object.rotation)
+        normal.set(-1, 0, 0).applyEuler(this.rotation)
         rightPlane.normal.copy(normal)
         rightPlane.constant = -position.dot(rightPlane.normal) + 1.37
       }
@@ -159,7 +161,7 @@ export class Editor {
     }
 
     for (let color of Object.keys(result)) {
-      const colorMesh = this.object.getObjectByName(color)
+      const colorMesh = this.getObjectByName(color)
       colorMesh.geometry.dispose()
       let text = result[color]
       if (util.isPrintable(text[tab.index]) && color !== "black") {
@@ -174,7 +176,7 @@ export class Editor {
 
     for (let [i, tab] of this.tabs.entries()) {
       tab.update(i, this.font)
-      tab.canvas.object.visible = i === this.currentTab
+      tab.canvas.visible = i === this.currentTab
     }
   }
 
@@ -224,7 +226,8 @@ export class Editor {
     const ast = esprima.parseScript(code)
     const topLevelIdentifiers = []
     for (const statement of ast.body) {
-      if (statement.type === 'FunctionDeclaration') {
+      if (statement.type === 'FunctionDeclaration' ||
+          statement.type === 'ClassDeclaration') {
         topLevelIdentifiers.push(statement.id.name)
       } else if (statement.type === 'VariableDeclaration') {
         for (const declaration of statement.declarations) {
@@ -415,7 +418,7 @@ export class Editor {
       else if (event.key === "P") {
         this.insert("console.log()")
         this.moveCursor(-2, 0)
-       }
+      }
       else if (event.key === "Tab") {
         this.previousTab()
         this.visited()
@@ -528,39 +531,6 @@ export class Editor {
       else if (event.key === "w") {
         this.deleteTab(this.currentTab)
       }
-      else if (event.key === "o") {
-        fetch('/open', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'text/plain',
-          },
-        }).then(response => response.json())
-          .then(data => {
-            const numTabs = this.tabs.length
-            for (let i = 0; i < numTabs; i++) {
-              this.deleteTab(0)
-            }
-            this.tabs = []
-
-            for (let tab of data.tabs) {
-              this.newTab(tab.text, tab.index)
-            }
-
-            this.update()
-          })
-      }
-      else if (event.key === "s") {
-        const keys = ["text", "index", "offset", "saved"]
-        const tabs = this.tabs.map(tab => util.selectKeys(tab, keys))
-
-        fetch('/save', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'text/plain',
-          },
-          body: JSON.stringify({tabs})
-        })
-      }
       else if (event.key === "h") {
         this.toggleVisibility()
       }
@@ -639,31 +609,31 @@ export class Editor {
   }
 
   hide () {
-    this.object.visible = false
+    this.visible = false
   }
 
   show () {
-    this.object.position.copy(avatar.position)
+    this.position.copy(avatar.position)
     const direction = new THREE.Vector3(0, 0, -1)
     direction.applyEuler(camera.rotation)
     direction.applyEuler(avatar.rotation)
     direction.y = 0
     direction.normalize().multiplyScalar(2)
-    this.object.position.add(direction)
-    this.object.position.y += 1.2
+    this.position.add(direction)
+    this.position.y += 1
     const eye = new THREE.Vector3().copy(avatar.position)
-    eye.y += 1.2
-    this.object.lookAt(eye)
+    eye.y += 1
+    this.lookAt(eye)
     const quarterTurn = new THREE.Euler(0, util.toRadians(90), 0)
     direction.applyEuler(quarterTurn)
     direction.normalize().multiplyScalar(-0.4)
-    this.object.position.add(direction)
-    this.object.visible = true
+    this.position.add(direction)
+    this.visible = true
     this.updateClippingPlanes()
   }
 
   toggleVisibility () {
-    if (this.object.visible) {
+    if (this.visible) {
       this.hide()
     }
     else {

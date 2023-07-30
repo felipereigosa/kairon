@@ -1,8 +1,9 @@
 import * as THREE from 'three'
 import * as util from './util'
 
-export class Canvas {
+export class Canvas extends THREE.Group {
   constructor () {
+    super()
     this.width = 11.5
     this.height = 5
     const geometry = new THREE.PlaneGeometry(this.width, this.height)
@@ -11,11 +12,11 @@ export class Canvas {
     this.canvas.height = 200 * this.height
     this.context = this.canvas.getContext('2d')
     this.texture = new THREE.Texture(this.canvas)
-    this.clear()
     const material = new THREE.MeshBasicMaterial({map: this.texture,
                                                   transparent: true})
-    this.object = new THREE.Mesh(geometry, material)
-    this.object.renderOrder = 1
+    const plane = new THREE.Mesh(geometry, material)
+    plane.renderOrder = 1
+    this.add(plane)
     this.drawing = false
     this.erasing = false
     this.windowWidth = 800
@@ -54,7 +55,6 @@ export class Canvas {
     this.context.globalCompositeOperation = 'destination-out'
     this.context.fillStyle = "rgba(0,0,0,1)"
     this.context.fillRect(0, 0, this.canvas.width, this.canvas.height)
-
     this.texture.needsUpdate = true
   }
 

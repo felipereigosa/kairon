@@ -4,14 +4,13 @@ import { Canvas } from './canvas'
 
 const textOffset = [-4.5, 2]
 
-export class Tab {
+export class Tab extends THREE.Group {
   constructor () {
+    super()
     this.text = ""
     this.index = 0
     this.offset = 0
     this.saved = true
-
-    this.object = new THREE.Group()
 
     const geometry = new THREE.BufferGeometry()
     const material = new THREE.MeshBasicMaterial({color: 0xffffff})
@@ -19,11 +18,11 @@ export class Tab {
     this.title = new THREE.Mesh(geometry, material)
     this.title.scale.set(0.15, 0.15, 0.15)
     this.title.position.set(textOffset[0] - 2.35, 0, 0.02)
-    this.object.add(this.title)
+    this.add(this.title)
 
     this.canvas = new Canvas()
-    this.object.add(this.canvas.object)
-    this.canvas.object.position.set(1.1, 0, 0.01)
+    this.canvas.position.set(1.1, 0, 0.01)
+    this.add(this.canvas)
   }
 
   computeTitle () {

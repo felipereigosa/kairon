@@ -239,8 +239,8 @@ function init () {
                 })
 
     window.editor = new Editor()
-    editor.object.scale.set(0.2, 0.2, 0.2)
-    scene.add(editor.object)
+    editor.scale.set(0.2, 0.2, 0.2)
+    scene.add(editor)
     editor.show()
 
     scene.traverse(function (child) {
@@ -422,7 +422,7 @@ function render () {
         turn()
 
         scene.traverse((child) => {
-          if (child.update) {
+          if (child.update && child.interactive) {
             child.update()
           }
         })

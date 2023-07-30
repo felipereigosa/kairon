@@ -70,12 +70,22 @@ export class Editor extends THREE.Group {
         this.add(mesh)
       }
 
-      this.tabs = []
-      this.newTab("", 0)
       this.font = font
-
       this.updateClippingPlanes()
-      this.update()
+
+      fetch('/load-state', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain',
+        },
+      }).then(response => response.text())
+        .then(data => {
+          this.tabs = []
+          for (let tab of data.split("\n\n//@\n\n")) {
+            this.newTab(tab, 0)
+          }
+          this.update()
+        })
     })
   }
 
@@ -260,6 +270,7 @@ export class Editor extends THREE.Group {
                     import * as util from './util'
                     import { Button } from './presets/button'
                     import { Slider } from './presets/slider'
+                    import { Cube, Sphere } from './presets/shapes'
 
                     export function run () {
                       try {
@@ -278,10 +289,31 @@ export class Editor extends THREE.Group {
         },
         body: code
       })
+
+      fetch('/save-state', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'text/plain',
+        },
+        body: this.tabs.map(tab => tab.text).join("\n\n//@\n\n")
+      })
     }
     catch (error) {
       this.handleOutput(error + "\n")
     }
+  }
+
+  getTerminalTab () {
+    let index = this.tabs.findIndex(tab => {
+      return util.isTerminal(tab.text)
+    })
+
+    if (index === -1) {
+      this.newTab("> ", 2)
+      index = this.tabs.length - 1
+    }
+
+    return index
   }
 
   handleOutput (output) {
@@ -295,15 +327,7 @@ export class Editor extends THREE.Group {
         this.tabs[this.currentTab].index = this.tabs[this.currentTab].text.length
       }
       else {
-        let outTabIndex = this.tabs.findIndex(tab => {
-          return util.isTerminal(tab.text)
-        })
-
-        if (outTabIndex === -1) {
-          this.newTab("> ", 2)
-          outTabIndex = this.tabs.length - 1
-        }
-
+        const outTabIndex = this.getTerminalTab()
         const tab = this.tabs[outTabIndex]
         const index = tab.text.lastIndexOf(">")
         const [before, after] = util.splitText(tab.text, index)
@@ -408,6 +432,16 @@ export class Editor extends THREE.Group {
       }
       else if (event.key === ">") {
         tab.index = tab.text.length
+      }
+      else if (event.key === "P") {
+        tab.offset = Math.max(0, tab.offset - 1)
+        this.moveCursor(0, -1)
+      }
+      else if (event.key === "N") {
+        const lines = tab.text.split("\n")
+        console.log(tab.offset)
+        tab.offset = Math.min(lines.length - 12, tab.offset + 1)
+        this.moveCursor(0, 1)
       }
     }
     else if (event.ctrlKey && event.shiftKey) {
@@ -518,12 +552,7 @@ export class Editor extends THREE.Group {
         }
         else {
           const [row, col] = this.getRowCol()
-          if (tab.offset === row) {
-            tab.offset = tab.offset - 12
-          }
-          else {
-            tab.offset = row
-          }
+          tab.offset = row - 5
         }
 
         tab.clearCanvas()
@@ -533,6 +562,16 @@ export class Editor extends THREE.Group {
       }
       else if (event.key === "h") {
         this.toggleVisibility()
+      }
+      else if (event.key === "i") {
+        const terminalTab = this.getTerminalTab()
+        if (terminalTab === this.currentTab) {
+          this.currentTab = this.savedCurrentTab
+        }
+        else {
+          this.savedCurrentTab = this.currentTab
+          this.currentTab = terminalTab
+        }
       }
     }
     else if (event.key === "Backspace") {

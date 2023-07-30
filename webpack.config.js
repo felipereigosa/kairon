@@ -1,11 +1,11 @@
-const HtmlWebpackPlugin = require('html-webpack-plugin');
-const fs = require('fs');
-const path = require('path');
-const codePath = path.resolve(__dirname, 'src/code.js');
-const savePath = path.resolve(__dirname, 'state.js');
-const logPath = path.resolve(__dirname, 'log.js');
-const CopyPlugin = require('copy-webpack-plugin');
-const { exec } = require('child_process');
+const fs = require('fs')
+const path = require('path')
+const HtmlWebpackPlugin = require('html-webpack-plugin')
+const CopyPlugin = require('copy-webpack-plugin')
+const express = require('express');
+const codePath = path.resolve(__dirname, 'src/code.js')
+const statePath = path.resolve(__dirname, 'state.js')
+const { exec } = require('child_process')
 
 module.exports = {
   mode: 'development',
@@ -13,74 +13,47 @@ module.exports = {
     hot: true,
 
     before: function(app, server) {
+      app.use(express.json());
+      app.use(express.text());
+
       app.post('/update-code', function(req, res) {
-        let body = '';
-        req.on('data', chunk => {
-          body += chunk.toString();
-        });
-        req.on('end', () => {
-          const lines = body.split('\n');
-          fs.appendFile(logPath, lines.slice(8, lines.length - 6).join('\n'),
-                        err => {
-                          if (err) {
-                            console.error(err);
-                          }
-                        });
-          fs.writeFile(codePath, body, err => {
-            if (err) {
-              console.error(err);
-              res.sendStatus(500);
-            } else {
-              res.sendStatus(200);
-            }
-          });
-        });
-      });
-
-      app.post('/complete-code', function(req, res) {
-        let code = '';
-        req.on('data', chunk => {
-          code += chunk.toString();
-        });
-        req.on('end', () => {
-          fs.writeFile("/tmp/code.txt", code, (err) => {
-            exec(`emacs --batch --eval '(load-file "copilot.el")' --eval '(complete)'`,
-                 (error, stdout, stderr) => {
-                   const data = JSON.parse(stdout);
-                   res.json(data);
-                 });
-          });
-        });
-      });
-
-      app.post('/save', function(req, res) {
-        let body = '';
-        req.on('data', chunk => {
-          body += chunk.toString();
-        });
-        req.on('end', () => {
-          fs.writeFile(savePath, body, err => {
-            if (err) {
-              console.error(err);
-              res.sendStatus(500);
-            } else {
-              res.sendStatus(200);
-            }
-          });
-        });
-      });
-
-      app.post('/open', function(req, res) {
-        fs.readFile(savePath, 'utf8', (err, data) => {
+        fs.writeFile(codePath, req.body, err => {
           if (err) {
             console.error(err);
+            res.sendStatus(500);
+          } else {
+            res.sendStatus(200);
           }
-          else {
-            res.json(JSON.parse(data));
+        })
+      })
+
+      app.post('/complete-code', function(req, res) {
+        fs.writeFile("/tmp/code.txt", req.body, (err) => {
+          exec(`emacs --batch --eval '(load-file "copilot.el")' --eval '(complete)'`,
+               (error, stdout, stderr) => {
+                 const data = JSON.parse(stdout)
+                 res.json(data)
+               })
+        })
+      })
+
+      app.post('/save-state', function(req, res) {
+        fs.writeFile(statePath, req.body, err => {
+          if (err) {
+            console.error(err);
+            res.sendStatus(500);
+          } else {
+            res.sendStatus(200);
           }
-        });
-      });
-    },
+        })
+      })
+
+      app.post('/load-state', function(req, res) {
+        fs.readFile(statePath, 'utf8', (err, data) => {
+          res.send(data)
+        })
+      })
+    }
   },
 
   plugins: [
@@ -94,4 +67,4 @@ module.exports = {
       ],
     }),
   ],
-};
+}

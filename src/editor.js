@@ -3,10 +3,9 @@ import { FontLoader } from 'three/addons/loaders/FontLoader'
 import * as esprima from 'esprima'
 import { highlight } from './highlight'
 import * as util from './util'
-import { colors } from './colors'
+import { colors, textOffset } from './config'
 import { Tab } from './tab'
-
-const textOffset = [-4.5, 2]
+import { Mark } from './mark'
 
 export class Editor extends THREE.Group {
   constructor () {
@@ -31,6 +30,12 @@ export class Editor extends THREE.Group {
     divider.position.set(textOffset[0] - 0.3, 0, 0.01)
     divider.scale.set(0.01, 4.5, 1)
     this.add(divider)
+
+    this.clippingPlanes = [...Array(3)].map(() => new THREE.Plane())
+    this.updateClippingPlanes()
+
+    this.mark = new Mark(this)
+    this.add(this.mark)
 
     this.pointer = new THREE.Group()
     this.pointer.position.z = 0.03
@@ -60,18 +65,17 @@ export class Editor extends THREE.Group {
       const template = new THREE.Mesh(geometry, material)
       template.scale.set(0.2, 0.2, 0.2)
       template.position.set(textOffset[0], textOffset[1], 0.02)
-      material.clippingPlanes = [...Array(3)].map(() => new THREE.Plane())
 
       for (let color of Object.keys(colors)) {
         const mesh = template.clone()
         mesh.name = color
         mesh.material = template.material.clone()
+        mesh.material.clippingPlanes = this.clippingPlanes
         mesh.material.color.set(colors[color])
         this.add(mesh)
       }
 
       this.font = font
-      this.updateClippingPlanes()
 
       fetch('/load-state', {
         method: 'POST',
@@ -93,6 +97,7 @@ export class Editor extends THREE.Group {
     const tab = new Tab()
     tab.text = text
     tab.index = index
+    tab.mark = -1
     tab.canvas.pointer = this.pointer
     this.add(tab)
     this.tabs.push(tab)
@@ -115,9 +120,9 @@ export class Editor extends THREE.Group {
     return lines.slice(0, row).reduce((acc, x) => acc + x.length + 1, 0)
   }
 
-  getRowCol () {
+  getRowCol (i) {
     const tab = this.tabs[this.currentTab]
-    const index = tab.index
+    const index = (i === undefined) ? tab.index : i
     const before = tab.text.substring(0, index)
     const lines = before.split("\n")
     const row = lines.length - 1
@@ -133,24 +138,19 @@ export class Editor extends THREE.Group {
   }
 
   updateClippingPlanes () {
-    if (this.font) {
-      for (let color of Object.keys(colors)) {
-        const colorMesh = this.getObjectByName(color)
-        const [bottomPlane, topPlane, rightPlane] = colorMesh.material.clippingPlanes
-        let position = new THREE.Vector3()
-        this.getWorldPosition(position)
-        let normal = new THREE.Vector3(0, 1, 0).applyEuler(this.rotation)
-        bottomPlane.normal.copy(normal)
-        bottomPlane.constant = -position.dot(bottomPlane.normal) + 0.48
-        topPlane.normal.copy(normal)
-        topPlane.normal.multiplyScalar(-1)
-        topPlane.constant = -position.dot(topPlane.normal) + 0.45
+    const [bottomPlane, topPlane, rightPlane] = this.clippingPlanes
+    let position = new THREE.Vector3()
+    this.getWorldPosition(position)
+    let normal = new THREE.Vector3(0, 1, 0).applyEuler(this.rotation)
+    bottomPlane.normal.copy(normal)
+    bottomPlane.constant = -position.dot(bottomPlane.normal) + 0.48
+    topPlane.normal.copy(normal)
+    topPlane.normal.multiplyScalar(-1)
+    topPlane.constant = -position.dot(topPlane.normal) + 0.45
 
-        normal.set(-1, 0, 0).applyEuler(this.rotation)
-        rightPlane.normal.copy(normal)
-        rightPlane.constant = -position.dot(rightPlane.normal) + 1.37
-      }
-    }
+    normal.set(-1, 0, 0).applyEuler(this.rotation)
+    rightPlane.normal.copy(normal)
+    rightPlane.constant = -position.dot(rightPlane.normal) + 1.37
   }
 
   update () {
@@ -188,6 +188,7 @@ export class Editor extends THREE.Group {
       tab.update(i, this.font)
       tab.canvas.visible = i === this.currentTab
     }
+    this.mark.update(tab)
   }
 
   insert (text) {
@@ -386,7 +387,8 @@ export class Editor extends THREE.Group {
     tab.index += indent.length + 1
   }
 
-  prevWordIndex (text, index) {
+  prevWordIndex (index) {
+    const text = this.tabs[this.currentTab].text
     let r = /[a-zA-Z0-9_$]/g
     index -= 2
     while ((r.lastIndex = 0, !r.test(text[index])) ||
@@ -401,7 +403,8 @@ export class Editor extends THREE.Group {
     return index
   }
 
-  nextWordIndex (text, index) {
+  nextWordIndex (index) {
+    const text = this.tabs[this.currentTab].text
     let r = /[a-zA-Z0-9_$]/g
     index += 1
     while ((r.lastIndex = 0, !r.test(text[index])) ||
@@ -439,9 +442,16 @@ export class Editor extends THREE.Group {
       }
       else if (event.key === "N") {
         const lines = tab.text.split("\n")
-        console.log(tab.offset)
         tab.offset = Math.min(lines.length - 12, tab.offset + 1)
         this.moveCursor(0, 1)
+      }
+    }
+    else if (event.ctrlKey && event.altKey) {
+      if (event.key === " ") {
+        if (tab.mark === -1) {
+          tab.mark = tab.index
+        }
+        tab.mark = this.nextWordIndex(tab.mark)
       }
     }
     else if (event.ctrlKey && event.shiftKey) {
@@ -457,21 +467,28 @@ export class Editor extends THREE.Group {
         this.previousTab()
         this.visited()
       }
+      else if (event.key === "W") {
+        this.deleteTab(this.currentTab)
+      }
     }
     else if (event.altKey) {
       if (event.key === "f") {
-        tab.index = this.nextWordIndex(tab.text, tab.index)
+        tab.index = this.nextWordIndex(tab.index)
       }
       else if (event.key === "b") {
-        tab.index = this.prevWordIndex(tab.text, tab.index)
+        tab.index = this.prevWordIndex(tab.index)
       }
       else if (event.key === "d") {
-        const index = this.nextWordIndex(tab.text, tab.index)
+        const index = this.nextWordIndex(tab.index)
         this.erase(index - tab.index)
       }
       else if (event.key === "Backspace") {
-        const index = this.prevWordIndex(tab.text, tab.index)
+        const index = this.prevWordIndex(tab.index)
         this.erase(index - tab.index)
+      }
+      else if (event.key === "w") {
+        this.clipboard = tab.text.substring(tab.index, tab.mark)
+        tab.mark = -1
       }
     }
     else if (event.ctrlKey) {
@@ -557,9 +574,6 @@ export class Editor extends THREE.Group {
 
         tab.clearCanvas()
       }
-      else if (event.key === "w") {
-        this.deleteTab(this.currentTab)
-      }
       else if (event.key === "h") {
         this.toggleVisibility()
       }
@@ -572,6 +586,20 @@ export class Editor extends THREE.Group {
           this.savedCurrentTab = this.currentTab
           this.currentTab = terminalTab
         }
+      }
+      else if (event.key === " ") {
+        tab.mark = tab.index
+      }
+      else if (event.key === "g") {
+        tab.mark = -1
+      }
+      else if (event.key === "y") {
+        this.insert(this.clipboard)
+      }
+      else if (event.key === "w") {
+        this.clipboard = tab.text.substring(tab.index, tab.mark)
+        this.erase(tab.mark - tab.index)
+        tab.mark = -1
       }
     }
     else if (event.key === "Backspace") {

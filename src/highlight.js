@@ -1,6 +1,6 @@
 
 const hljs = require('highlight.js')
-import { colors } from './colors'
+import { colors } from './config'
 import * as util from './util'
 
 const colorMap = {"hljs-keyword": "blue",

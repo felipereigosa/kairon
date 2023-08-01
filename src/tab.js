@@ -1,8 +1,7 @@
 import * as THREE from 'three'
 import * as util from './util'
 import { Canvas } from './canvas'
-
-const textOffset = [-4.5, 2]
+import { textOffset } from './config'
 
 export class Tab extends THREE.Group {
   constructor () {

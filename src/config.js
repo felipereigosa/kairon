@@ -12,3 +12,5 @@ export const colors =
    "teal": 0x008080,
    "black": 0x000000,
   }
+
+export const textOffset = [-4.5, 2]

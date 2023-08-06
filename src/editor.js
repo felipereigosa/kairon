@@ -442,7 +442,9 @@ export class Editor extends THREE.Group {
       }
       else if (event.key === "N") {
         const lines = tab.text.split("\n")
-        tab.offset = Math.min(lines.length - 12, tab.offset + 1)
+        if (lines.length > 12) {
+          tab.offset = Math.min(lines.length - 12, tab.offset + 1)
+        }
         this.moveCursor(0, 1)
       }
     }
@@ -452,6 +454,9 @@ export class Editor extends THREE.Group {
           tab.mark = tab.index
         }
         tab.mark = this.nextWordIndex(tab.mark)
+      }
+      else if (event.key === "w") {
+        this.deleteTab(this.currentTab)
       }
     }
     else if (event.ctrlKey && event.shiftKey) {
@@ -466,9 +471,6 @@ export class Editor extends THREE.Group {
       else if (event.key === "Tab") {
         this.previousTab()
         this.visited()
-      }
-      else if (event.key === "W") {
-        this.deleteTab(this.currentTab)
       }
     }
     else if (event.altKey) {

@@ -53,11 +53,4 @@ Now to navigate the VR world, you can move with the left joystick, move up and d
 
 ## Code completion with copilot
 
-Copilot completion works but it's a bit of a hack. For now, until I can figure out json-rpc properly it uses emacs as a backend, so if you want to use it, make sure you have emacs installed and copilot is working from this project: https://github.com/zerolfx/copilot.el (make sure you log in to copilot and it works inside emacs). After that, if you are in the kairon directory (that has the copilot.el file) this should return a completion in the command line:
-
-```
-echo "[1, 2, 3, " > /tmp/code.txt
-emacs --batch --eval '(load-file "copilot.el")' --eval '(complete)'
-```
-
-If that works, then you can complete code inside kairon with Ctrl + C. I told you it was a hack, I'll fix it. While it's fetching the completion the cursor will turn black. If there's no completion it will turn white back without inserting anything. It takes a while, but it should be much faster once I sort json-rpc out.
+You can complete code inside kairon using copilot with Ctrl + C. You need to authenticated it first by using the url and the code given when you first start the project with npm start. While it's fetching the completion the cursor will turn black. If there's no completion it will turn white back without inserting anything.
